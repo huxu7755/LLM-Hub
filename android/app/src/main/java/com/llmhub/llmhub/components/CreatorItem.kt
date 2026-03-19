@@ -47,6 +47,13 @@ fun CreatorItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            IconButton(onClick = onRename) {
+                Icon(
+                    Icons.Outlined.Edit,
+                    contentDescription = stringResource(R.string.action_rename),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             // Options dropdown
             Box {
                 IconButton(onClick = { expanded = true }) {

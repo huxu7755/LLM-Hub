@@ -36,6 +36,7 @@ class ChatRepository(
     }
 
     suspend fun deleteCreator(creator: CreatorEntity) {
+        chatDao.clearCreatorFromChats(creator.id)
         creatorDao.deleteCreator(creator)
     }
     

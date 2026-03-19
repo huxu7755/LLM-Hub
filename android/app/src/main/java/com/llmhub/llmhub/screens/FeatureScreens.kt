@@ -344,6 +344,20 @@ fun TranslatorScreen(
     ) { uri: Uri? ->
         uri?.let { viewModel.setInputImage(it) }
     }
+
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            recordedAudioData = null
+            audioPlayer?.release()
+            audioPlayer = null
+            isAudioPlaying = false
+            audioCurrentPosition = 0
+            audioDuration = 0
+            viewModel.setInputAudio(it)
+        }
+    }
     
     // Audio permission launcher
     val audioPermissionLauncher = rememberLauncherForActivityResult(
@@ -847,6 +861,15 @@ fun TranslatorScreen(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
+                                                IconButton(
+                                                    onClick = { audioPickerLauncher.launch("audio/*") }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.UploadFile,
+                                                        contentDescription = stringResource(R.string.upload_file),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
                                                 if (isRecording) {
                                                     Text(
                                                         text = "${remainingSeconds}s ${stringResource(R.string.remaining)}",
@@ -1140,6 +1163,97 @@ fun TranslatorScreen(
                                                 }
                                             }
                                         }
+                                    } else if (inputAudioUri != null) {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .padding(12.dp)
+                                                    .fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.AudioFile,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Text(
+                                                    text = stringResource(R.string.audio_file),
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                IconButton(onClick = { audioPickerLauncher.launch("audio/*") }) {
+                                                    Icon(
+                                                        Icons.Default.UploadFile,
+                                                        contentDescription = stringResource(R.string.upload_file),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                                IconButton(onClick = { viewModel.clearInput() }) {
+                                                    Icon(
+                                                        Icons.Default.Delete,
+                                                        contentDescription = stringResource(R.string.action_delete),
+                                                        tint = MaterialTheme.colorScheme.error
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        // Show transcription if available (after translation) for uploaded audio
+                                        if (transcriptionText.isNotEmpty()) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 8.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.Top
+                                            ) {
+                                                Text(
+                                                    text = transcriptionText,
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    modifier = Modifier.weight(1f),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                // TTS button for source language (transcription)
+                                                IconButton(
+                                                    onClick = {
+                                                        if (isTtsSpeaking) {
+                                                            ttsService.stop()
+                                                        } else {
+                                                            // Set TTS to source language before speaking
+                                                            ttsService.setLanguage(localeForSource())
+                                                            ttsService.speak(transcriptionText)
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                                        contentDescription = if (isTtsSpeaking) "Stop reading" else "Read aloud",
+                                                        tint = if (isTtsSpeaking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                // Copy button
+                                                IconButton(
+                                                    onClick = {
+                                                        clipboardManager.setText(AnnotatedString(transcriptionText))
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.ContentCopy,
+                                                        contentDescription = "Copy",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1323,6 +1437,7 @@ fun TranscriberScreen(
     val isModelLoaded by viewModel.isModelLoaded.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val transcriptionText by viewModel.transcriptionText.collectAsState()
+    val audioUri by viewModel.audioUri.collectAsState()
     
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -1357,6 +1472,20 @@ fun TranscriberScreen(
     ) { granted ->
         hasAudioPermission = granted
         if (granted) viewModel.setRecording(true)
+    }
+
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            audioPlayer?.release()
+            audioPlayer = null
+            isAudioPlaying = false
+            audioCurrentPosition = 0
+            audioDuration = 0
+            recordedAudioData = null
+            viewModel.setAudioUri(it)
+        }
     }
 
     LaunchedEffect(Unit) { 
@@ -1566,6 +1695,7 @@ fun TranscriberScreen(
                                     }
                                 }
                             } else {
+                                val canStartRecording = audioUri == null
                                 // Hero-style recording card UI (also used while recording)
                                 Card(
                                     shape = RoundedCornerShape(24.dp),
@@ -1595,6 +1725,7 @@ fun TranscriberScreen(
                                                     shape = CircleShape
                                                 )
                                                 .clickable {
+                                                    if (!canStartRecording) return@clickable
                                                     if (isRecording) {
                                                         viewModel.setRecording(false)
                                                     } else {
@@ -1611,12 +1742,20 @@ fun TranscriberScreen(
                                                 Icons.Default.Mic,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(60.dp),
-                                                tint = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimary
+                                                tint = when {
+                                                    !canStartRecording -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                    isRecording -> MaterialTheme.colorScheme.error
+                                                    else -> MaterialTheme.colorScheme.onPrimary
+                                                }
                                             )
                                         }
 
                                         Text(
-                                            text = if (isRecording) stringResource(R.string.recording) else stringResource(R.string.record_voice_message),
+                                            text = when {
+                                                !canStartRecording -> stringResource(R.string.audio_file)
+                                                isRecording -> stringResource(R.string.recording)
+                                                else -> stringResource(R.string.record_voice_message)
+                                            },
                                             style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center,
@@ -1633,6 +1772,47 @@ fun TranscriberScreen(
                                                 textAlign = TextAlign.Center,
                                                 modifier = Modifier.align(Alignment.CenterHorizontally)
                                             )
+                                        }
+                                    }
+                                }
+                                if (audioUri == null) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    OutlinedButton(
+                                        onClick = { audioPickerLauncher.launch("audio/*") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.UploadFile, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(stringResource(R.string.upload_file))
+                                    }
+                                }
+                            }
+
+                            if (recordedAudioData == null && audioUri != null) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(12.dp)
+                                            .fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.AudioFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                        Text(
+                                            text = stringResource(R.string.audio_file),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        IconButton(onClick = { audioPickerLauncher.launch("audio/*") }) {
+                                            Icon(Icons.Default.UploadFile, contentDescription = stringResource(R.string.upload_file), tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                        IconButton(onClick = { viewModel.setAudioUri(null) }) {
+                                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error)
                                         }
                                     }
                                 }
@@ -1709,11 +1889,11 @@ fun TranscriberScreen(
                         }
                     } else {
                         FilledTonalButton(
-                            onClick = { viewModel.transcribe() },
+                            onClick = { viewModel.transcribe(audioUri) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            enabled = recordedAudioData != null && !isTranscribing && isModelLoaded,
+                            enabled = (recordedAudioData != null || audioUri != null) && !isTranscribing && isModelLoaded,
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(stringResource(R.string.transcriber_transcribe))

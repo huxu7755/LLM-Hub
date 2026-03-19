@@ -11,6 +11,7 @@ import com.llmhub.llmhub.data.ModelAvailabilityProvider
 import com.llmhub.llmhub.screens.Language
 import com.llmhub.llmhub.screens.languageCodeToEnglishName
 import com.llmhub.llmhub.inference.MediaPipeInferenceService
+import com.llmhub.llmhub.utils.AudioConversionUtils
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -482,14 +483,6 @@ $inputText""".trimIndent()
     
     private suspend fun loadAudioFromUri(uri: Uri): ByteArray? {
         val app = getApplication<Application>()
-        return withContext(Dispatchers.IO) {
-            try {
-                app.contentResolver.openInputStream(uri)?.use { stream ->
-                    stream.readBytes()
-                }
-            } catch (_: Exception) {
-                null
-            }
-        }
+        return AudioConversionUtils.convertUriToFloat32Wav(app, uri)
     }
 }

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.llmhub.llmhub.data.LLMModel
 import com.llmhub.llmhub.data.ModelAvailabilityProvider
 import com.llmhub.llmhub.inference.MediaPipeInferenceService
+import com.llmhub.llmhub.utils.AudioConversionUtils
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -196,7 +197,8 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
             _transcriptionText.value = ""
             
             try {
-                val audioBytes = _audioData.value ?: (audioUri?.let { readAudioBytes(it) })
+                val uriToUse = audioUri ?: _audioUri.value
+                val audioBytes = _audioData.value ?: (uriToUse?.let { readAudioBytes(it) })
                     ?: throw IllegalStateException("Unable to read audio input")
                 
                 val prompt = """You are a professional transcriber.
@@ -237,14 +239,6 @@ Do not add any commentary or explanations.""".trimIndent()
 
     private suspend fun readAudioBytes(uri: Uri): ByteArray? {
         val app = getApplication<Application>()
-        return withContext(Dispatchers.IO) {
-            try {
-                app.contentResolver.openInputStream(uri)?.use { stream ->
-                    stream.readBytes()
-                }
-            } catch (_: Exception) {
-                null
-            }
-        }
+        return AudioConversionUtils.convertUriToFloat32Wav(app, uri)
     }
 }

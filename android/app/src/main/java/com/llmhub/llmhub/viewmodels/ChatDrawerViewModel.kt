@@ -1,6 +1,7 @@
 package com.llmhub.llmhub.viewmodels
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.llmhub.llmhub.data.ChatEntity
@@ -52,11 +53,30 @@ class ChatDrawerViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun updateCreator(creator: com.llmhub.llmhub.data.CreatorEntity) = viewModelScope.launch {
+        try {
+            repository.insertCreator(
+                creator.copy(
+                    name = creator.name.trim(),
+                    description = creator.description.trim(),
+                    pctfPrompt = creator.pctfPrompt.trim(),
+                    icon = creator.icon.trim().ifBlank { "🤖" }
+                )
+            )
+        } catch (e: Exception) {
+            Log.e("ChatDrawerViewModel", "Failed to update creator ${creator.id}: ${e.message}", e)
+        }
+    }
+
     fun deleteAllChats() = viewModelScope.launch {
         repository.deleteAllChats()
     }
     
     fun deleteCreator(creator: com.llmhub.llmhub.data.CreatorEntity) = viewModelScope.launch {
-        repository.deleteCreator(creator)
+        try {
+            repository.deleteCreator(creator)
+        } catch (e: Exception) {
+            Log.e("ChatDrawerViewModel", "Failed to delete creator ${creator.id}: ${e.message}", e)
+        }
     }
 } 

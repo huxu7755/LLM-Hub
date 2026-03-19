@@ -61,6 +61,10 @@ fun CreatorGenerationScreen(
     var userPrompt by remember { mutableStateOf("") }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var navigatingBack by remember { mutableStateOf(false) }
+    var editedIcon by remember { mutableStateOf("") }
+    var editedName by remember { mutableStateOf("") }
+    var editedDescription by remember { mutableStateOf("") }
+    var editedSystemPrompt by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
 
     // Keyboard handling
@@ -102,6 +106,10 @@ fun CreatorGenerationScreen(
 
     LaunchedEffect(generatedCreator) {
         if (generatedCreator != null) {
+            editedIcon = generatedCreator!!.icon
+            editedName = generatedCreator!!.name
+            editedDescription = generatedCreator!!.description
+            editedSystemPrompt = generatedCreator!!.pctfPrompt
             scrollState.animateScrollTo(scrollState.maxValue)
         }
     }
@@ -313,21 +321,29 @@ fun CreatorGenerationScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = generatedCreator!!.icon,
-                                style = MaterialTheme.typography.displayMedium
+                            OutlinedTextField(
+                                value = editedIcon,
+                                onValueChange = { editedIcon = it.take(2) },
+                                modifier = Modifier.width(84.dp),
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.headlineMedium.copy(textAlign = TextAlign.Center)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Column {
-                                Text(
-                                    text = generatedCreator!!.name,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
+                                OutlinedTextField(
+                                    value = editedName,
+                                    onValueChange = { editedName = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    label = { Text(stringResource(R.string.chat_title)) }
                                 )
-                                Text(
-                                    text = generatedCreator!!.description,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = editedDescription,
+                                    onValueChange = { editedDescription = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 2,
+                                    label = { Text(stringResource(R.string.creator_prompt_label)) }
                                 )
                             }
                         }
@@ -339,25 +355,33 @@ fun CreatorGenerationScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Text(
-                            text = generatedCreator!!.pctfPrompt,
-                            style = MaterialTheme.typography.bodySmall,
+                        OutlinedTextField(
+                            value = editedSystemPrompt,
+                            onValueChange = { editedSystemPrompt = it },
+                            textStyle = MaterialTheme.typography.bodySmall,
                             modifier = Modifier
                                 .background(
                                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                                     RoundedCornerShape(8.dp)
                                 )
                                 .padding(8.dp)
-                                .fillMaxWidth()
+                                .fillMaxWidth(),
+                            minLines = 8
                         )
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
                         Button(
                             onClick = {
-                                viewModel.saveCreator(generatedCreator!!) {
+                                val creatorToSave = generatedCreator!!.copy(
+                                    icon = editedIcon.trim().ifBlank { generatedCreator!!.icon },
+                                    name = editedName.trim().ifBlank { generatedCreator!!.name },
+                                    description = editedDescription.trim().ifBlank { generatedCreator!!.description },
+                                    pctfPrompt = editedSystemPrompt.trim().ifBlank { generatedCreator!!.pctfPrompt }
+                                )
+                                viewModel.saveCreator(creatorToSave) {
                                     // Navigate to a new chat with this creator
-                                    onNavigateToChat(generatedCreator!!.id)
+                                    onNavigateToChat(creatorToSave.id)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),

@@ -12,6 +12,7 @@ import com.llmhub.llmhub.data.*
 import com.llmhub.llmhub.inference.InferenceService
 import com.llmhub.llmhub.repository.ChatRepository
 import com.llmhub.llmhub.utils.FileUtils
+import com.llmhub.llmhub.utils.AudioConversionUtils
 import com.llmhub.llmhub.R
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -766,6 +767,7 @@ class ChatViewModel(
             return
         }
         val messageText = text.trim()
+        var modelAudioData: ByteArray? = audioData
 
         if (messageText.isEmpty() && attachmentUri == null && audioData == null) return
 
@@ -862,6 +864,23 @@ class ChatViewModel(
                     }
                     
                     when (attachmentFileInfo.type) {
+                        FileUtils.SupportedFileType.AUDIO -> {
+                            // Convert uploaded audio to float32 WAV before feeding to multimodal audio models.
+                            modelAudioData = AudioConversionUtils.convertUriToFloat32Wav(context, attachmentUri)
+                            if (modelAudioData == null) {
+                                val errorMessage = context.getString(R.string.message_send_error)
+                                repository.addMessage(chatId, errorMessage, isFromUser = false)
+                                _isLoading.value = false
+                                isGenerating = false
+                                return@launch
+                            }
+                            processedAttachmentUri = FileUtils.copyFileToInternalStorage(
+                                context,
+                                attachmentUri,
+                                attachmentFileInfo.name
+                            )
+                        }
+
                         FileUtils.SupportedFileType.IMAGE -> {
                             // Check if current model supports vision before processing image
                             if (currentModel != null && !currentModel!!.supportsVision) {
@@ -1154,7 +1173,7 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
                                         // First generation of this reply
                                         val baseUserContent = currentUserMessage.content.trim()
                                         // Add audio token if audio data is present (MediaPipe requirement)
-                        Log.d("ChatViewModel", "Audio token check: audioData=${audioData?.size ?: 0} bytes, supportsAudio=${currentModel!!.supportsAudio}, isAudioDisabled=$isAudioDisabled, baseUserContent='$baseUserContent'")
+                        Log.d("ChatViewModel", "Audio token check: audioData=${modelAudioData?.size ?: 0} bytes, supportsAudio=${currentModel!!.supportsAudio}, isAudioDisabled=$isAudioDisabled, baseUserContent='$baseUserContent'")
                         val lastUserContent = baseUserContent // Do not inject <audio_soft_token>; follow Google AI Edge Gallery pattern
                         Log.d("ChatViewModel", "Final lastUserContent (no audio soft token): '$lastUserContent'")
                                         
@@ -1342,7 +1361,7 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
                                             } else ""
                                             
                                             // For audio messages, include instruction in the user message
-                                            val userMessage = if (audioData != null) {
+                                            val userMessage = if (modelAudioData != null) {
                                                 if (lastUserContent.trim().isEmpty()) {
                                                     // Audio-only: provide clear instruction to transcribe and respond
                                                     "Listen to the audio and respond to it's content like normal text prompt" // More explicit instruction
@@ -1365,7 +1384,7 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
                                         } else {
                                             // Normal path: include trimmed history and explicit assistant cue
                                             // For audio messages, we add the instruction as part of the user message
-                                            var basePrompt = if (audioData != null && lastUserContent.trim().isEmpty()) {
+                                            var basePrompt = if (modelAudioData != null && lastUserContent.trim().isEmpty()) {
                                                 // Audio-only: replace the last user message with clear audio instruction
                                                 val historyLines = history.split("\n")
                                                 val modifiedHistory = historyLines.dropLast(1).joinToString("\n") + 
@@ -1494,7 +1513,7 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
                         currentModel!!, 
                         chatId, 
                         images, 
-                        audioData, // Pass audio data for Gemma-3n models
+                        modelAudioData, // Pass audio data for Gemma-3n models
                         webSearchEnabled
                     )
                     // Track precise generation window based on first and last streamed chunks

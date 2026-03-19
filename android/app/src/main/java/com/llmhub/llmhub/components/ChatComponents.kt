@@ -1820,6 +1820,27 @@ fun MessageInput(
                                 // Audio recording option for audio-capable models
                                 if (supportsAudio) {
                                     DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("🎵", style = MaterialTheme.typography.headlineSmall)
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
+                                                    Text(stringResource(R.string.audio_file))
+                                                    Text(
+                                                        stringResource(R.string.upload_file),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            showAttachmentOptions = false
+                                            documentPickerLauncher.launch("audio/*")
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
                                         text = { 
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text("🎙️", style = MaterialTheme.typography.headlineSmall)

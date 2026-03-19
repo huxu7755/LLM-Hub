@@ -30,6 +30,9 @@ interface ChatDao {
     
     @Query("DELETE FROM chats")
     suspend fun deleteAllChats()
+
+    @Query("UPDATE chats SET creatorId = NULL WHERE creatorId = :creatorId")
+    suspend fun clearCreatorFromChats(creatorId: String)
 }
 
 @Dao

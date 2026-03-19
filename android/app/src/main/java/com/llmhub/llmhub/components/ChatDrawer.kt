@@ -42,7 +42,7 @@ fun ChatDrawer(
     val creators by viewModel.allCreators.collectAsState()
     var showDeleteAllDialog by remember { mutableStateOf(false) }
     var chatToRename by remember { mutableStateOf<ChatEntity?>(null) }
-    var creatorToRename by remember { mutableStateOf<com.llmhub.llmhub.data.CreatorEntity?>(null) }
+    var creatorToEdit by remember { mutableStateOf<com.llmhub.llmhub.data.CreatorEntity?>(null) }
     var chatToDelete by remember { mutableStateOf<ChatEntity?>(null) }
     var creatorToDelete by remember { mutableStateOf<com.llmhub.llmhub.data.CreatorEntity?>(null) }
     
@@ -59,14 +59,14 @@ fun ChatDrawer(
         )
     }
 
-    if (creatorToRename != null) {
-        com.llmhub.llmhub.screens.RenameChatDialog(
-            chatTitle = creatorToRename!!.name,
-            onConfirm = { newName ->
-                viewModel.renameCreator(creatorToRename!!.id, newName)
-                creatorToRename = null
+    creatorToEdit?.let { creator ->
+        CreatorEditDialog(
+            creator = creator,
+            onConfirm = { updated ->
+                viewModel.updateCreator(updated)
+                creatorToEdit = null
             },
-            onDismiss = { creatorToRename = null }
+            onDismiss = { creatorToEdit = null }
         )
     }
 
@@ -89,15 +89,16 @@ fun ChatDrawer(
         )
     }
 
-    if (creatorToDelete != null) {
+    creatorToDelete?.let { creator ->
         AlertDialog(
             onDismissRequest = { creatorToDelete = null },
             title = { Text(stringResource(R.string.dialog_delete_creator_title)) },
-            text = { Text(stringResource(R.string.dialog_delete_creator_message, creatorToDelete!!.name)) },
+            // Avoid localized format placeholder crashes in some locales where `%1` is invalid.
+            text = { Text(creator.name) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteCreator(creatorToDelete!!)
+                        viewModel.deleteCreator(creator)
                         creatorToDelete = null
                     }
                 ) { Text(stringResource(R.string.action_delete)) }
@@ -193,7 +194,7 @@ fun ChatDrawer(
                             creator = creator,
                             onClick = { onNavigateToCreatorChat(creator.id) },
                             onDelete = { creatorToDelete = creator },
-                            onRename = { creatorToRename = creator }
+                            onRename = { creatorToEdit = creator }
                         )
                     }
                 }
@@ -269,6 +270,82 @@ fun ChatDrawer(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CreatorEditDialog(
+    creator: com.llmhub.llmhub.data.CreatorEntity,
+    onConfirm: (com.llmhub.llmhub.data.CreatorEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var icon by remember(creator.id) { mutableStateOf(creator.icon) }
+    var name by remember(creator.id) { mutableStateOf(creator.name) }
+    var description by remember(creator.id) { mutableStateOf(creator.description) }
+    var pctfPrompt by remember(creator.id) { mutableStateOf(creator.pctfPrompt) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.creator_screen_title)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = icon,
+                    onValueChange = { icon = it.take(2) },
+                    modifier = Modifier.width(100.dp),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.chat_title)) }
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    label = { Text(stringResource(R.string.creator_prompt_label)) }
+                )
+                Text(
+                    text = stringResource(R.string.creator_system_prompt_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                OutlinedTextField(
+                    value = pctfPrompt,
+                    onValueChange = { pctfPrompt = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 8
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(
+                        creator.copy(
+                            icon = icon.trim().ifBlank { creator.icon },
+                            name = name.trim().ifBlank { creator.name },
+                            description = description.trim().ifBlank { creator.description },
+                            pctfPrompt = pctfPrompt.trim().ifBlank { creator.pctfPrompt }
+                        )
+                    )
+                }
+            ) { Text(stringResource(R.string.save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
 }
 
 @Composable
