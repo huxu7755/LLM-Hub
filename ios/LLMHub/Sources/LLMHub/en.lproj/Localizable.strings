@@ -396,12 +396,12 @@
 "feature_scam_detector_desc" = "Analyze text, images, or URLs for potential scams";
 "feature_image_generator" = "Image Generator";
 "feature_image_generator_desc" = "Generate images from text prompts with AI";
-"feature_vibe_coder" = "Vibes";
+"feature_vibe_coder" = "Vibecode";
 "feature_vibe_coder_desc" = "Generate HTML, JavaScript, and Python code with AI";
 "feature_creator_generation" = "creAItors";
 "feature_creator_generation_desc" = "Create your own custom AI personas";
 "drawer_my_creators" = "my creAItors";
-"vibe_coder_title" = "Vibes";
+"vibe_coder_title" = "Vibecode";
 "vibe_coder_prompt_label" = "What would you like to code?";
 "vibe_coder_prompt_hint" = "Describe the code you want to generate...";
 "vibe_coder_generate" = "Generate Code";

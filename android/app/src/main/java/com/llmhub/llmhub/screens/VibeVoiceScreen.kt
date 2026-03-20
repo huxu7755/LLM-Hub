@@ -2,7 +2,6 @@ package com.llmhub.llmhub.screens
 
 import android.Manifest
 import android.net.Uri
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -103,9 +102,7 @@ fun VibeVoiceScreen(
     val conversationTurns by viewModel.conversationTurns.collectAsState()
 
     val context = LocalContext.current
-    val activity = context as ComponentActivity
     val isPremium by (context.applicationContext as LlmHubApplication).billingManager.isPremium.collectAsState(initial = false)
-    val rewardedAdManager = remember { (context.applicationContext as LlmHubApplication).rewardedAdManager }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -486,11 +483,14 @@ fun VibeVoiceScreen(
                             }
                         }
                     }
+                }
 
-                    if (!isPremium) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        BannerAd(modifier = Modifier.fillMaxWidth())
-                    }
+                if (!isPremium) {
+                    BannerAd(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                    )
                 }
             }
         }
@@ -525,15 +525,8 @@ fun VibeVoiceScreen(
                     onModelSelected = { viewModel.selectModel(it) },
                     onBackendSelected = { backend, deviceId -> viewModel.selectBackend(backend, deviceId) },
                     onLoadModel = {
-                        if (isPremium) {
-                            isChatActive = false
-                            viewModel.loadModel()
-                        } else {
-                            rewardedAdManager.showAdOrGrant(activity) {
-                                isChatActive = false
-                                viewModel.loadModel()
-                            }
-                        }
+                        isChatActive = false
+                        viewModel.loadModel()
                     },
                     onUnloadModel = {
                         if (isTtsSpeaking) {

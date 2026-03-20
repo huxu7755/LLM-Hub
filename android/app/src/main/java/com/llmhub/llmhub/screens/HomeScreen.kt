@@ -478,12 +478,14 @@ private fun HomeHeroCard(
                     )
                 }
 
-                Text(
-                    text = stringResource(feature.description),
-                    style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.92f),
-                    maxLines = if (compact) 1 else 2
-                )
+                if (feature.route != "chat") {
+                    Text(
+                        text = stringResource(feature.description),
+                        style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.92f),
+                        maxLines = if (compact) 1 else 2
+                    )
+                }
 
                 Surface(
                     shape = RoundedCornerShape(24.dp),
