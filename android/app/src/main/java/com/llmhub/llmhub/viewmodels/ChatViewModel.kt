@@ -50,6 +50,7 @@ class ChatViewModel(
     
     // SharedPreferences for persisting chat settings
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
+    private val modelPrefs = ModelPreferences(context)
 
     companion object {
         private const val KEY_CURRENT_CHAT_ID = "current_chat_id"
@@ -1508,8 +1509,10 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
                         p
                     } catch (_: Exception) { currentPrompt }
 
+                    val promptWithModelSystem = applyPerModelSystemPrompt(finalPrompt, currentModel)
+
                     val responseStream = inferenceService.generateResponseStreamWithSession(
-                        finalPrompt,
+                        promptWithModelSystem,
                         currentModel!!, 
                         chatId, 
                         images, 
@@ -1881,8 +1884,9 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
         // Create a new generation job that can be cancelled
         generationJob = viewModelScope.launch {
             try {
+                val promptWithModelSystem = applyPerModelSystemPrompt(fullHistory, model)
                 val responseStream = inferenceService.generateResponseStreamWithSession(
-                    fullHistory, model, chatId, images, null, webSearchEnabled
+                    promptWithModelSystem, model, chatId, images, null, webSearchEnabled
                 )
 
                 responseStream.collect { piece ->
@@ -2556,6 +2560,25 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
             Log.d("ChatViewModel", "Forwarded generation parameters to inference service: maxTokens=$maxTokens topK=$topK topP=$topP temperature=$temperature nGpuLayers=$nGpuLayers enableThinking=$enableThinking")
         } catch (e: Exception) {
             Log.w("ChatViewModel", "Failed to set generation parameters: ${e.message}")
+        }
+    }
+
+    private suspend fun applyPerModelSystemPrompt(prompt: String, model: LLMModel?): String {
+        val m = model ?: return prompt
+        return try {
+            val cfg = modelPrefs.getModelConfig(m.name)
+            val systemPrompt = cfg?.systemPrompt?.trim().orEmpty()
+            if (systemPrompt.isBlank()) {
+                prompt
+            } else if (prompt.startsWith("system: ")) {
+                val existing = prompt.removePrefix("system: ").trimStart()
+                "system: $systemPrompt\n\n$existing"
+            } else {
+                "system: $systemPrompt\n\n$prompt"
+            }
+        } catch (e: Exception) {
+            Log.w("ChatViewModel", "Failed to apply per-model system prompt for ${m.name}: ${e.message}")
+            prompt
         }
     }
     
@@ -3372,8 +3395,9 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
                         // Get web search preference
                         val webSearchEnabled = runBlocking { themePreferences.webSearchEnabled.first() }
                         
+                        val promptWithModelSystem = applyPerModelSystemPrompt(fullHistory, currentModel)
                         val responseStream = inferenceService.generateResponseStreamWithSession(
-                            fullHistory, 
+                            promptWithModelSystem, 
                             currentModel!!, 
                             chatId, 
                             images,
@@ -3604,8 +3628,9 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
 
                     // For now, do not include images/audio during edit-resend; extend if needed
                     val images: List<android.graphics.Bitmap> = emptyList()
+                    val promptWithModelSystem = applyPerModelSystemPrompt(fullHistory, currentModel)
                     val responseStream = inferenceService.generateResponseStreamWithSession(
-                        fullHistory,
+                        promptWithModelSystem,
                         currentModel!!,
                         chatId,
                         images,

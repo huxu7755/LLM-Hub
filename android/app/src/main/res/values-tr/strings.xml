@@ -831,6 +831,8 @@
     <string name="feature_vibevoice">Sesli sohbet</string>
     <string name="feature_vibevoice_desc">Yapay zeka ile yerel sesli sohbet</string>
     <string name="chat_now">Şimdi sohbet et</string>
+    <string name="model_system_prompt_label">Sistem istemi (model başına)</string>
+    <string name="model_system_prompt_hint">Bu model yanıt oluşturduğunda otomatik olarak uygulanır.</string>
 </resources>
 
 

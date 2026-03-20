@@ -838,6 +838,8 @@
     <string name="feature_vibevoice">Czat głosowy</string>
     <string name="feature_vibevoice_desc">Lokalny czat głosowy z AI</string>
     <string name="chat_now">Czatuj teraz</string>
+    <string name="model_system_prompt_label">Prompt systemowy (na model)</string>
+    <string name="model_system_prompt_hint">Stosowany automatycznie, gdy ten model generuje odpowiedź.</string>
 </resources>
 
 

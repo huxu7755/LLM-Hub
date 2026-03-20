@@ -834,6 +834,8 @@
     <string name="feature_vibevoice">چت صوتی</string>
     <string name="feature_vibevoice_desc">چت صوتی با هوش مصنوعی به‌صورت محلی</string>
     <string name="chat_now">اکنون چت کنید</string>
+    <string name="model_system_prompt_label">پرامپت سیستم (برای هر مدل)</string>
+    <string name="model_system_prompt_hint">وقتی این مدل پاسخ تولید می‌کند، به‌صورت خودکار اعمال می‌شود.</string>
 </resources>
 
 

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LLM Hub</string>
     
@@ -781,6 +781,8 @@
     <!-- Privacy &amp; Ads consent -->
     <string name="privacy_ads_title">Privacidade e anúncios</string>
     <string name="privacy_ads_subtitle">Gerencie a personalização de anúncios e suas escolhas de consentimento</string>
+
+    <!-- Preserved new keys from current file -->
     <string name="export">Exportar</string>
     <string name="home_section_tools">Ferramentas</string>
     <string name="home_section_utilities">Utilitários</string>
@@ -788,6 +790,3 @@
     <string name="feature_vibevoice_desc">Chat de voz com IA local</string>
     <string name="chat_now">Conversar agora</string>
 </resources>
-
-
-

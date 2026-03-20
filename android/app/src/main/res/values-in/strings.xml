@@ -836,6 +836,8 @@
     <string name="feature_vibevoice">Obrolan suara</string>
     <string name="feature_vibevoice_desc">Obrolan suara dengan AI secara lokal</string>
     <string name="chat_now">Chat sekarang</string>
+    <string name="model_system_prompt_label">Prompt sistem (per model)</string>
+    <string name="model_system_prompt_hint">Diterapkan secara otomatis saat model ini menghasilkan respons.</string>
 </resources>
 
 

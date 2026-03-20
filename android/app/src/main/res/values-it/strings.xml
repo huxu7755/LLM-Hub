@@ -828,6 +828,8 @@
     <string name="feature_vibevoice">Chat vocale</string>
     <string name="feature_vibevoice_desc">Chat vocale con IA in locale</string>
     <string name="chat_now">Chatta ora</string>
+    <string name="model_system_prompt_label">Prompt di sistema (per modello)</string>
+    <string name="model_system_prompt_hint">Applicato automaticamente quando questo modello genera una risposta.</string>
 </resources>
 
 

@@ -834,6 +834,8 @@
     <string name="feature_vibevoice">צ׳אט קולי</string>
     <string name="feature_vibevoice_desc">צ׳אט קולי עם בינה מלאכותית מקומית</string>
     <string name="chat_now">צ׳אט עכשיו</string>
+    <string name="model_system_prompt_label">הנחיית מערכת (לכל מודל)</string>
+    <string name="model_system_prompt_hint">מוחל אוטומטית כאשר המודל הזה יוצר תשובה.</string>
 </resources>
 
 

@@ -118,6 +118,7 @@ fun ChatSettingsSheet(
     var disableVision by remember { mutableStateOf(isGemma3nModel) }
     var disableAudio by remember { mutableStateOf(isGemma3nModel) }
     var enableThinking by remember { mutableStateOf(true) }
+    var systemPromptText by remember { mutableStateOf("") }
 
     val selectedModelSupportsVisionInput by remember(selectedModel, context) {
         derivedStateOf {
@@ -173,6 +174,7 @@ fun ChatSettingsSheet(
                     disableAudio = saved.disableAudio
                     gpuLayers = saved.nGpuLayers
                     enableThinking = saved.enableThinking
+                    systemPromptText = saved.systemPrompt
                 } else {
                     // Reset to defaults for new model
                     val effCap = if (selectedModelSupportsVisionInput && !newIsGemma3n) minOf(newBaseCap, 8192) else newBaseCap
@@ -187,6 +189,7 @@ fun ChatSettingsSheet(
                     disableVision = newIsGemma3n || !selectedModelSupportsVisionInput
                     disableAudio = newIsGemma3n
                     enableThinking = true
+                    systemPromptText = ""
                 }
             } catch (e: Exception) {
                 // Reset to defaults on error
@@ -202,6 +205,7 @@ fun ChatSettingsSheet(
                 disableVision = newIsGemma3n || !selectedModelSupportsVisionInput
                 disableAudio = newIsGemma3n
                 enableThinking = true
+                systemPromptText = ""
             }
         }
     }
@@ -528,7 +532,8 @@ fun ChatSettingsSheet(
                                                     disableVision = disableVision,
                                                     disableAudio = disableAudio,
                                                     nGpuLayers = gpuLayers,
-                                                    enableThinking = enableThinking
+                                                    enableThinking = enableThinking,
+                                                    systemPrompt = systemPromptText.trim()
                                                 )
                                                 modelPrefs.setModelConfig(model.name, cfg)
                                             } catch (_: Exception) {}
@@ -816,6 +821,22 @@ fun ChatSettingsSheet(
                             }
                         }
 
+                        // Per-model system prompt
+                        Text(
+                            text = stringResource(R.string.model_system_prompt_label),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        OutlinedTextField(
+                            value = systemPromptText,
+                            onValueChange = { systemPromptText = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(stringResource(R.string.model_system_prompt_hint))
+                            },
+                            minLines = 2,
+                            maxLines = 6
+                        )
+
                         // Performance tip
                         Text(
                             text = stringResource(R.string.gemma3n_performance_tip),
@@ -851,6 +872,7 @@ fun ChatSettingsSheet(
                                     disableVision = newIsGemma3n || !selectedModelSupportsVisionInput
                                     disableAudio = newIsGemma3n
                                     enableThinking = true
+                                    systemPromptText = ""
                                 }
                             },
                             modifier = Modifier.align(Alignment.End)

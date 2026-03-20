@@ -822,6 +822,8 @@
     <string name="feature_vibevoice">Chat vocal</string>
     <string name="feature_vibevoice_desc">Chat vocal avec IA en local</string>
     <string name="chat_now">Discuter maintenant</string>
+    <string name="model_system_prompt_label">Invite système (par modèle)</string>
+    <string name="model_system_prompt_hint">S’applique automatiquement lorsque ce modèle génère une réponse.</string>
 </resources>
 
 

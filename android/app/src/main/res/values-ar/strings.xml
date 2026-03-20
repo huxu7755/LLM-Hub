@@ -833,6 +833,8 @@
     <string name="feature_vibevoice">دردشة صوتية</string>
     <string name="feature_vibevoice_desc">دردشة صوتية مع الذكاء الاصطناعي محليًا</string>
     <string name="chat_now">ابدأ الدردشة</string>
+    <string name="model_system_prompt_label">تعليمات النظام (لكل نموذج)</string>
+    <string name="model_system_prompt_hint">تُطبّق تلقائيًا عند قيام هذا النموذج بإنشاء رد.</string>
 </resources>
 
 

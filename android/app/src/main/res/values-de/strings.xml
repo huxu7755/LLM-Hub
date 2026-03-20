@@ -800,6 +800,8 @@
     <string name="feature_vibevoice">Sprachchat</string>
     <string name="feature_vibevoice_desc">Sprachchat mit KI lokal</string>
     <string name="chat_now">Jetzt chatten</string>
+    <string name="model_system_prompt_label">System-Prompt (pro Modell)</string>
+    <string name="model_system_prompt_hint">Wird automatisch angewendet, wenn dieses Modell eine Antwort erzeugt.</string>
 </resources>
 
 
