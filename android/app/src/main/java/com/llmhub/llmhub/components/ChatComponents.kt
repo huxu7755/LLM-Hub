@@ -22,6 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.ClickableText
 import android.content.Intent
+import android.graphics.Color as AndroidColor
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -38,6 +41,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -98,6 +102,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import android.view.ViewGroup
+import androidx.compose.ui.viewinterop.AndroidView
 
 /**
  * Custom selectable markdown text component that supports both markdown rendering and text selection.
@@ -292,6 +297,46 @@ fun parseInlineMarkdown(text: String, baseColor: Color, builder: AnnotatedString
     
     while (i < text.length) {
         when {
+            // HTML superscript <sup>text</sup>
+            text.regionMatches(i, "<sup>", 0, 5, ignoreCase = true) -> {
+                val closeIndex = text.indexOf("</sup>", startIndex = i + 5, ignoreCase = true)
+                if (closeIndex != -1) {
+                    val innerText = text.substring(i + 5, closeIndex)
+                    builder.withStyle(
+                        SpanStyle(
+                            color = baseColor,
+                            baselineShift = BaselineShift.Superscript
+                        )
+                    ) {
+                        append(innerText)
+                    }
+                    i = closeIndex + 6
+                    continue
+                }
+
+                builder.withStyle(SpanStyle(color = baseColor)) { append(text[i]) }
+                i++
+            }
+            // HTML subscript <sub>text</sub>
+            text.regionMatches(i, "<sub>", 0, 5, ignoreCase = true) -> {
+                val closeIndex = text.indexOf("</sub>", startIndex = i + 5, ignoreCase = true)
+                if (closeIndex != -1) {
+                    val innerText = text.substring(i + 5, closeIndex)
+                    builder.withStyle(
+                        SpanStyle(
+                            color = baseColor,
+                            baselineShift = BaselineShift.Subscript
+                        )
+                    ) {
+                        append(innerText)
+                    }
+                    i = closeIndex + 6
+                    continue
+                }
+
+                builder.withStyle(SpanStyle(color = baseColor)) { append(text[i]) }
+                i++
+            }
             // Markdown links [text](url)
             text[i] == '[' -> {
                 val textEndIndex = text.indexOf(']', i + 1)
@@ -377,6 +422,150 @@ fun parseInlineMarkdown(text: String, baseColor: Color, builder: AnnotatedString
             }
         }
     }
+}
+
+private sealed interface LatexSegment {
+        data class TextPart(val text: String) : LatexSegment
+        data class MathPart(val latex: String, val isBlock: Boolean) : LatexSegment
+}
+
+private val latexRegex = Regex(
+        pattern = """(?s)(\$\$(.+?)\$\$|\\\[(.+?)\\\]|\\\((.+?)\\\)|(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$))"""
+)
+
+private fun parseLatexSegments(input: String): List<LatexSegment> {
+        if (input.isBlank()) return listOf(LatexSegment.TextPart(input))
+
+        val result = mutableListOf<LatexSegment>()
+        var cursor = 0
+
+        latexRegex.findAll(input).forEach { match ->
+                if (match.range.first > cursor) {
+                        result.add(LatexSegment.TextPart(input.substring(cursor, match.range.first)))
+                }
+
+                val full = match.value
+                val isBlock = full.startsWith("$$") || full.startsWith("\\[")
+                val latex = when {
+                        full.startsWith("$$") && full.endsWith("$$") -> full.removePrefix("$$").removeSuffix("$$")
+                        full.startsWith("\\[") && full.endsWith("\\]") -> full.removePrefix("\\[").removeSuffix("\\]")
+                        full.startsWith("\\(") && full.endsWith("\\)") -> full.removePrefix("\\(").removeSuffix("\\)")
+                        full.startsWith("$") && full.endsWith("$") -> full.removePrefix("$").removeSuffix("$")
+                        else -> full
+                }.trim()
+
+                if (latex.isNotEmpty()) {
+                        result.add(LatexSegment.MathPart(latex = latex, isBlock = isBlock))
+                } else {
+                        result.add(LatexSegment.TextPart(full))
+                }
+
+                cursor = match.range.last + 1
+        }
+
+        if (cursor < input.length) {
+                result.add(LatexSegment.TextPart(input.substring(cursor)))
+        }
+
+        return if (result.isEmpty()) listOf(LatexSegment.TextPart(input)) else result
+}
+
+private fun Color.toCssHex(): String {
+        val r = (red * 255).toInt().coerceIn(0, 255)
+        val g = (green * 255).toInt().coerceIn(0, 255)
+        val b = (blue * 255).toInt().coerceIn(0, 255)
+        return String.format("#%02X%02X%02X", r, g, b)
+}
+
+private fun escapeForJs(value: String): String {
+        return value
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "\\n")
+                .replace("\r", "")
+}
+
+@Composable
+private fun LatexMathView(
+        latex: String,
+        isBlock: Boolean,
+        textColor: Color,
+        modifier: Modifier = Modifier
+) {
+        val cssTextColor = textColor.toCssHex()
+        val expressionJs = remember(latex) { escapeForJs(latex) }
+
+        val html = remember(expressionJs, isBlock, cssTextColor) {
+                """
+                <!doctype html>
+                <html>
+                <head>
+                    <meta charset="utf-8" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+                    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+                    <style>
+                        html, body {
+                            margin: 0;
+                            padding: 0;
+                            background: transparent;
+                            color: $cssTextColor;
+                            overflow: hidden;
+                        }
+                        #math {
+                            width: 100%;
+                            text-align: ${if (isBlock) "left" else "left"};
+                            padding: ${if (isBlock) "2px 0" else "0"};
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div id="math"></div>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function () {
+                            try {
+                                katex.render('$expressionJs', document.getElementById('math'), {
+                                    throwOnError: false,
+                                    displayMode: ${if (isBlock) "true" else "false"}
+                                });
+                            } catch (e) {
+                                document.getElementById('math').textContent = '$expressionJs';
+                            }
+                        });
+                    </script>
+                </body>
+                </html>
+                """.trimIndent()
+        }
+
+        AndroidView(
+                modifier = modifier.heightIn(min = if (isBlock) 40.dp else 24.dp),
+                factory = { context ->
+                        WebView(context).apply {
+                                setBackgroundColor(AndroidColor.TRANSPARENT)
+                                isVerticalScrollBarEnabled = false
+                                isHorizontalScrollBarEnabled = false
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.loadWithOverviewMode = true
+                                settings.useWideViewPort = true
+                                webViewClient = WebViewClient()
+                                layoutParams = ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.WRAP_CONTENT
+                                )
+                        }
+                },
+                update = { webView ->
+                        webView.loadDataWithBaseURL(
+                                "https://localhost/",
+                                html,
+                                "text/html",
+                                "utf-8",
+                                null
+                        )
+                }
+        )
 }
 
 // LFM Thinking stream sentinels (must match OnnxInferenceService)
@@ -1186,14 +1375,48 @@ fun RenderMessageSegments(
                         Modifier.fillMaxWidth()
                     }
 
-                    SelectableMarkdownText(
-                        markdown = seg.text,
-                        color = baseColor,
-                        fontSize = fontSize,
-                        modifier = textModifier,
-                        textAlign = if (isUser) TextAlign.End else TextAlign.Start,
-                        linkColorOverride = linkColor
-                    )
+                    val latexSegments = remember(seg.text) { parseLatexSegments(seg.text) }
+                    val hasMath = latexSegments.any { it is LatexSegment.MathPart }
+
+                    if (!hasMath) {
+                        SelectableMarkdownText(
+                            markdown = seg.text,
+                            color = baseColor,
+                            fontSize = fontSize,
+                            modifier = textModifier,
+                            textAlign = if (isUser) TextAlign.End else TextAlign.Start,
+                            linkColorOverride = linkColor
+                        )
+                    } else {
+                        Column(modifier = textModifier) {
+                            latexSegments.forEach { part ->
+                                when (part) {
+                                    is LatexSegment.TextPart -> {
+                                        if (part.text.isNotBlank()) {
+                                            SelectableMarkdownText(
+                                                markdown = part.text,
+                                                color = baseColor,
+                                                fontSize = fontSize,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textAlign = if (isUser) TextAlign.End else TextAlign.Start,
+                                                linkColorOverride = linkColor
+                                            )
+                                        }
+                                    }
+                                    is LatexSegment.MathPart -> {
+                                        LatexMathView(
+                                            latex = part.latex,
+                                            isBlock = part.isBlock,
+                                            textColor = baseColor,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = if (part.isBlock) 4.dp else 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 is ParsedSegment.Code -> {
                     // Render code block with monospace and a subtle background
