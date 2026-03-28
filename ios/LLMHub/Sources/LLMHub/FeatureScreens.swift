@@ -6,6 +6,9 @@ import RunAnywhere
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 #if canImport(Network)
 import Network
 #endif
@@ -23,7 +26,7 @@ private func downloadableFeatureModels() -> [AIModel] {
         return documentsDir.appendingPathComponent("models")
     }()
 
-    return ModelData.models.filter { model in
+    var models = ModelData.models.filter { model in
         if model.isDependencyOnly { return false }
 
         if RunAnywhere.isModelDownloaded(model.id, framework: model.inferenceFramework) {
@@ -40,11 +43,49 @@ private func downloadableFeatureModels() -> [AIModel] {
             return FileManager.default.fileExists(atPath: fileURL.path)
         }
     }
+
+    if let appleModel = appleFoundationModelIfAvailable(),
+       !models.contains(where: { $0.id == appleModel.id }) {
+        models.append(appleModel)
+    }
+
+    return models
+}
+
+@MainActor
+private func appleFoundationModelIfAvailable() -> AIModel? {
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+        let model = SystemLanguageModel.default
+        guard model.isAvailable else { return nil }
+
+        return AIModel(
+            id: "apple.foundation.system",
+            name: "Apple Foundation Model",
+            description: "On-device Apple Intelligence foundation model.",
+            url: "apple://foundation-model",
+            category: .text,
+            sizeBytes: 0,
+            source: "Apple",
+            supportsVision: false,
+            supportsAudio: false,
+            supportsThinking: true,
+            supportsGpu: true,
+            requirements: ModelRequirements(minRamGB: 8, recommendedRamGB: 8),
+            contextWindowSize: max(1, model.contextSize),
+            modelFormat: .gguf,
+            additionalFiles: []
+        )
+    }
+    #endif
+
+    return nil
 }
 
 @MainActor
 private func selectedFeatureModel(named selectedModelName: String) -> AIModel? {
-    ModelData.models.first(where: { $0.name == selectedModelName })
+    downloadableFeatureModels().first(where: { $0.name == selectedModelName })
+        ?? ModelData.models.first(where: { $0.name == selectedModelName })
 }
 
 @MainActor

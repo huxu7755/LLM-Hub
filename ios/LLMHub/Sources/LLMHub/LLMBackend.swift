@@ -9,6 +9,8 @@ import ImageIO
 @MainActor
 class LLMBackend: ObservableObject {
     static let shared = LLMBackend()
+    private static let appleFoundationAliasId = "apple.foundation.system"
+    private static let runAnywhereFoundationModelId = "foundation-models-default"
 
     @Published var isLoaded: Bool = false
     @Published var currentlyLoadedModel: String? = nil
@@ -80,11 +82,45 @@ class LLMBackend: ObservableObject {
 
     private func loadedAIModel() -> AIModel? {
         guard let modelName = currentlyLoadedModel else { return nil }
-        return ModelData.models.first(where: { $0.name == modelName })
+        if let model = ModelData.models.first(where: { $0.name == modelName }) {
+            return model
+        }
+        if modelName == "Apple Foundation Model" {
+            #if canImport(FoundationModels)
+            if #available(iOS 26.0, *) {
+                return AIModel(
+                    id: "apple.foundation.system",
+                    name: "Apple Foundation Model",
+                    description: "On-device Apple Intelligence foundation model.",
+                    url: "apple://foundation-model",
+                    category: .text,
+                    sizeBytes: 0,
+                    source: "Apple",
+                    supportsVision: false,
+                    supportsAudio: false,
+                    supportsThinking: true,
+                    supportsGpu: true,
+                    requirements: ModelRequirements(minRamGB: 8, recommendedRamGB: 8),
+                    contextWindowSize: 4096,
+                    modelFormat: .gguf,
+                    additionalFiles: []
+                )
+            }
+            #endif
+        }
+        return nil
     }
 
     private func framework(for model: AIModel) -> InferenceFramework {
         model.inferenceFramework
+    }
+
+    private func isAppleFoundationAlias(_ model: AIModel) -> Bool {
+        model.id == Self.appleFoundationAliasId
+    }
+
+    private func activeRunAnywhereModelId(for model: AIModel) -> String {
+        isAppleFoundationAlias(model) ? Self.runAnywhereFoundationModelId : model.id
     }
 
     private func listGGUFFiles(in directory: URL) -> [URL] {
@@ -405,22 +441,29 @@ class LLMBackend: ObservableObject {
 
         try await ensureSDKReady()
         let effectiveContext = clampedContextWindow(contextWindow, for: model)
-        registerModel(model, contextLengthOverride: effectiveContext)
-        await RunAnywhere.flushPendingRegistrations()
-        _ = try? migrateLegacyModelIfNeeded(model)
-        _ = await RunAnywhere.discoverDownloadedModels()
+        let runAnywhereModelId = activeRunAnywhereModelId(for: model)
 
-        // Only local load here. Downloads are handled by the model download screen.
-        guard RunAnywhere.isModelDownloaded(model.id, framework: model.inferenceFramework) else {
-            throw NSError(domain: "LLMBackend", code: -100, userInfo: [NSLocalizedDescriptionKey: "Model is not downloaded locally"])
+        if isAppleFoundationAlias(model) {
+            // Apple Foundation model is built in; no download or registration required.
+            try await RunAnywhere.loadModel(runAnywhereModelId)
+        } else {
+            registerModel(model, contextLengthOverride: effectiveContext)
+            await RunAnywhere.flushPendingRegistrations()
+            _ = try? migrateLegacyModelIfNeeded(model)
+            _ = await RunAnywhere.discoverDownloadedModels()
+
+            // Only local load here. Downloads are handled by the model download screen.
+            guard RunAnywhere.isModelDownloaded(model.id, framework: model.inferenceFramework) else {
+                throw NSError(domain: "LLMBackend", code: -100, userInfo: [NSLocalizedDescriptionKey: "Model is not downloaded locally"])
+            }
+
+            try await RunAnywhere.loadModel(runAnywhereModelId)
         }
-
-        try await RunAnywhere.loadModel(model.id)
 
         isLoaded = true
         currentlyLoadedModel = model.name
         loadedContextWindow = effectiveContext
-        loadedLLMModelId = model.id
+        loadedLLMModelId = runAnywhereModelId
         loadedVLMModelId = nil
         loadedVLMProjectorPath = nil
     }
@@ -493,6 +536,26 @@ class LLMBackend: ObservableObject {
 
             let result = try await streamResult.metrics.value
             onUpdate(currentOutput, result.completionTokens, result.tokensPerSecond)
+            return
+        }
+
+        if let model = loadedAIModel(), model.id == Self.appleFoundationAliasId || loadedLLMModelId == Self.runAnywhereFoundationModelId {
+            // Foundation models may not stream in exact per-token order; generate non-stream and emulate incremental updates for UX.
+            let result = try await RunAnywhere.generate(prompt, options: options)
+            let fullText = result.text
+
+            var currentOutput = ""
+            let tokens = fullText.split(separator: " ", omittingEmptySubsequences: false)
+            for (index, token) in tokens.enumerated() {
+                if index > 0 { currentOutput += " " }
+                currentOutput += String(token)
+                onUpdate(currentOutput, result.tokensUsed, result.tokensPerSecond)
+                try? await Task.sleep(nanoseconds: 10_000_000) // 10ms for smoother perception
+            }
+
+            if currentOutput.isEmpty {
+                onUpdate(fullText, result.tokensUsed, result.tokensPerSecond)
+            }
             return
         }
 

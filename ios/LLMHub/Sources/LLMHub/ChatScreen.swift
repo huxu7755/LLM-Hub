@@ -3,6 +3,9 @@ import PhotosUI
 import RunAnywhere
 import SwiftUI
 import UniformTypeIdentifiers
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 #if canImport(ImageIO)
 import ImageIO
 #endif
@@ -54,6 +57,49 @@ private func resolveStoredAttachmentURL(_ storedPath: String?) -> URL? {
         }
     }
 
+    return nil
+}
+
+private let chatAppleFoundationModelId = "apple.foundation.system"
+
+@MainActor
+private func chatAppleFoundationModelIfAvailable() -> AIModel? {
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+        let model = SystemLanguageModel.default
+        guard model.isAvailable else { return nil }
+
+        return AIModel(
+            id: chatAppleFoundationModelId,
+            name: "Apple Foundation Model",
+            description: "On-device Apple Intelligence foundation model.",
+            url: "apple://foundation-model",
+            category: .text,
+            sizeBytes: 0,
+            source: "Apple",
+            supportsVision: false,
+            supportsAudio: false,
+            supportsThinking: true,
+            supportsGpu: true,
+            requirements: ModelRequirements(minRamGB: 8, recommendedRamGB: 8),
+            contextWindowSize: max(4096, model.contextSize),
+            modelFormat: .gguf,
+            additionalFiles: []
+        )
+    }
+    #endif
+
+    return nil
+}
+
+@MainActor
+private func chatModel(named modelName: String) -> AIModel? {
+    if let model = ModelData.models.first(where: { $0.name == modelName }) {
+        return model
+    }
+    if let appleModel = chatAppleFoundationModelIfAvailable(), appleModel.name == modelName {
+        return appleModel
+    }
     return nil
 }
 
@@ -112,6 +158,7 @@ class ChatViewModel: ObservableObject {
         }
     }
     @Published var isBackendLoading: Bool = false
+    @Published private(set) var lastModelLoadErrorMessage: String? = nil
     
     // Config Properties (Persisted per model)
     @Published var maxTokens: Double = ChatViewModel.defaultGenerationSettings.maxTokens {
@@ -173,7 +220,7 @@ class ChatViewModel: ObservableObject {
     }
 
     var contextWindowCapForSession: Double {
-        let selectedModelCap = Double(max(1, ModelData.models.first(where: { $0.name == selectedModelName })?.contextWindowSize ?? 0))
+        let selectedModelCap = Double(max(1, chatModel(named: selectedModelName)?.contextWindowSize ?? 0))
         let loadedCap = Double(max(1, llmBackend.loadedContextWindow ?? 0))
         let configuredCap = Double(max(1, Int(contextWindow)))
         return max(selectedModelCap, loadedCap, configuredCap, 1)
@@ -262,7 +309,7 @@ class ChatViewModel: ObservableObject {
         syncBackendSettings()
 
         guard selectedModelName != AppSettings.shared.localized("no_model_selected") else { return }
-        guard let model = ModelData.models.first(where: { $0.name == selectedModelName }) else { return }
+        guard let model = chatModel(named: selectedModelName) else { return }
 
         let modelMaxContext = max(1, model.contextWindowSize > 0 ? model.contextWindowSize : 2048)
         let desiredContextWindow = min(max(1, Int(contextWindow)), modelMaxContext)
@@ -278,8 +325,10 @@ class ChatViewModel: ObservableObject {
         
         do {
             try await llmBackend.loadModel(model)
+            lastModelLoadErrorMessage = nil
         } catch {
             print("Failed to load model: \(error)")
+            lastModelLoadErrorMessage = error.localizedDescription
         }
     }
 
@@ -297,7 +346,7 @@ class ChatViewModel: ObservableObject {
 
     private var selectedModelId: String? {
         guard selectedModelName != AppSettings.shared.localized("no_model_selected") else { return nil }
-        return ModelData.models.first(where: { $0.name == selectedModelName })?.id
+        return chatModel(named: selectedModelName)?.id
     }
 
     private func loadSettingsForSelectedModel() {
@@ -359,7 +408,7 @@ class ChatViewModel: ObservableObject {
     }
 
     private func clampSettings(_ settings: ModelGenerationSettings, forModelName modelName: String) -> ModelGenerationSettings {
-        guard let model = ModelData.models.first(where: { $0.name == modelName }) else {
+        guard let model = chatModel(named: modelName) else {
             var fallback = settings
             fallback.contextWindow = max(1, fallback.contextWindow)
             fallback.maxTokens = min(max(1, fallback.maxTokens), fallback.contextWindow)
@@ -435,7 +484,7 @@ class ChatViewModel: ObservableObject {
 
     @discardableResult
     func sendMessage(imageURL: URL? = nil, audioURL: URL? = nil) -> Bool {
-        let selectedModel = ModelData.models.first(where: { $0.name == selectedModelName })
+        let selectedModel = chatModel(named: selectedModelName)
         let effectiveImageURL = (enableVision && selectedModel?.supportsVision == true) ? imageURL : nil
         let effectiveAudioURL = (enableAudio && selectedModel?.supportsAudio == true) ? audioURL : nil
 
@@ -486,8 +535,8 @@ class ChatViewModel: ObservableObject {
             
             do {
                 if !llmBackend.isLoaded {
-                    // Fail if still not loaded
-                    let msg = AppSettings.shared.localized("please_download_model")
+                    // Report the real load failure when available (e.g. Apple Intelligence unavailable).
+                    let msg = lastModelLoadErrorMessage ?? AppSettings.shared.localized("please_download_model")
                     await updateLastAIMessage(content: msg, isGenerating: false)
                     await MainActor.run { self.isGenerating = false }
                     return
@@ -644,7 +693,7 @@ class ChatViewModel: ObservableObject {
 
             do {
                 if !llmBackend.isLoaded {
-                    let msg = AppSettings.shared.localized("please_download_model")
+                    let msg = lastModelLoadErrorMessage ?? AppSettings.shared.localized("please_download_model")
                     await updateLastAIMessage(content: msg, isGenerating: false)
                     await MainActor.run {
                         self.isGenerating = false
@@ -1707,7 +1756,7 @@ struct ChatScreen: View {
             return documentsDir.appendingPathComponent("models")
         }()
 
-        return ModelData.models.filter { model in
+        var models = ModelData.models.filter { model in
             if model.isDependencyOnly { return false }
 
             if RunAnywhere.isModelDownloaded(model.id, framework: model.inferenceFramework) {
@@ -1724,6 +1773,13 @@ struct ChatScreen: View {
                 return FileManager.default.fileExists(atPath: fileURL.path)
             }
         }
+
+        if let appleModel = chatAppleFoundationModelIfAvailable(),
+           !models.contains(where: { $0.id == appleModel.id }) {
+            models.append(appleModel)
+        }
+
+        return models
     }
 }
 

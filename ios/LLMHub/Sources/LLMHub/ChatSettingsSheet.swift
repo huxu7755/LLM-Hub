@@ -1,5 +1,8 @@
 import SwiftUI
 import RunAnywhere
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 struct ChatSettingsSheet: View {
     @ObservedObject var vm: ChatViewModel
@@ -205,7 +208,7 @@ struct ChatSettingsSheet: View {
             .onAppear {
                 syncDraftFromViewModel()
             }
-            .onChange(of: vm.selectedModelName) { _ in
+            .onChange(of: vm.selectedModelName) { _, _ in
                 syncDraftFromViewModel()
             }
             .onChange(of: draftContextWindow) { _, newValue in
@@ -223,7 +226,7 @@ struct ChatSettingsSheet: View {
             return documentsDir.appendingPathComponent("models")
         }()
 
-        return ModelData.models.filter { model in
+        var models = ModelData.models.filter { model in
             if model.isDependencyOnly { return false }
 
             if RunAnywhere.isModelDownloaded(model.id, framework: model.inferenceFramework) {
@@ -240,15 +243,28 @@ struct ChatSettingsSheet: View {
                 return FileManager.default.fileExists(atPath: fileURL.path)
             }
         }
+
+        if let appleModel = appleFoundationModelIfAvailable(),
+           !models.contains(where: { $0.id == appleModel.id }) {
+            models.append(appleModel)
+        }
+
+        return models
     }
     
     private var currentModel: AIModel? {
-        ModelData.models.first(where: { $0.name == vm.selectedModelName })
+        if let model = ModelData.models.first(where: { $0.name == vm.selectedModelName }) {
+            return model
+        }
+        if let appleModel = appleFoundationModelIfAvailable(), appleModel.name == vm.selectedModelName {
+            return appleModel
+        }
+        return nil
     }
 
     private var modelMaxContextWindow: Double {
-        guard let currentModel else { return 2048 }
-        let advertised = currentModel.contextWindowSize > 0 ? currentModel.contextWindowSize : 2048
+        guard let currentModel else { return 4096 }
+        let advertised = currentModel.contextWindowSize > 0 ? currentModel.contextWindowSize : 4096
         return Double(max(1, advertised))
     }
 
@@ -300,6 +316,36 @@ struct ChatSettingsSheet: View {
 
     private var draftedModels: [AIModel] {
         downloadedModels
+    }
+
+    @MainActor
+    private func appleFoundationModelIfAvailable() -> AIModel? {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            let model = SystemLanguageModel.default
+            guard model.isAvailable else { return nil }
+
+            return AIModel(
+                id: "apple.foundation.system",
+                name: "Apple Foundation Model",
+                description: "On-device Apple Intelligence foundation model.",
+                url: "apple://foundation-model",
+                category: .text,
+                sizeBytes: 0,
+                source: "Apple",
+                supportsVision: false,
+                supportsAudio: false,
+                supportsThinking: true,
+                supportsGpu: true,
+                requirements: ModelRequirements(minRamGB: 8, recommendedRamGB: 8),
+                contextWindowSize: max(1, model.contextSize),
+                modelFormat: .gguf,
+                additionalFiles: []
+            )
+        }
+        #endif
+
+        return nil
     }
 }
 
