@@ -438,40 +438,74 @@ private actor SpeechEngine {
     private let speechRecognizer = SFSpeechRecognizer()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    
+    private var onResult: (@Sendable (SFSpeechRecognitionResult) -> Void)?
+    private var onError: (@Sendable (Error) -> Void)?
+    private var isStreaming = false
 
-    func start(onTranscriptUpdate: @escaping @Sendable (String) -> Void, onError: @escaping @Sendable (Error) -> Void) throws {
+    func start(onResult: @escaping @Sendable (SFSpeechRecognitionResult) -> Void, onError: @escaping @Sendable (Error) -> Void) throws {
+        self.onResult = onResult
+        self.onError = onError
+        self.isStreaming = true
+
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: .duckOthers)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
 
-        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else {
-            throw NSError(domain: "SpeechEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unable to create request"])
-        }
-        
-        recognitionRequest.shouldReportPartialResults = true
-        
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { result, error in
-            if let result = result {
-                onTranscriptUpdate(result.bestTranscription.formattedString)
-            }
-            if let error = error {
-                onError(error)
-            }
-        }
+        try startNewTask()
         
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            recognitionRequest.append(buffer)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+            Task { [weak self] in
+                guard let self = self else { return }
+                await self.append(buffer)
+            }
         }
         
         audioEngine.prepare()
         try audioEngine.start()
     }
 
+    private func append(_ buffer: AVAudioPCMBuffer) {
+        recognitionRequest?.append(buffer)
+    }
+
+    private func startNewTask() throws {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        
+        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+        guard let recognitionRequest = recognitionRequest else {
+            throw NSError(domain: "SpeechEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unable to create request"])
+        }
+        
+        recognitionRequest.shouldReportPartialResults = true
+        if speechRecognizer?.supportsOnDeviceRecognition == true {
+            recognitionRequest.requiresOnDeviceRecognition = true
+        }
+        
+        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+            if let result = result {
+                self?.onResult?(result)
+                if result.isFinal {
+                    Task { [weak self] in
+                        guard let self = self else { return }
+                        if await self.isStreaming {
+                            try? await self.startNewTask()
+                        }
+                    }
+                }
+            }
+            if let error = error {
+                self?.onError?(error)
+            }
+        }
+    }
+
     func stop() {
+        isStreaming = false
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
@@ -483,13 +517,25 @@ private actor SpeechEngine {
 }
 
 @available(iOS 17.0, *)
+struct TranscriptionSession: Identifiable, Codable {
+    let id: UUID
+    var text: String
+    let timestamp: Date
+}
+
+@available(iOS 17.0, *)
 @MainActor
 private final class IOSSpeechTranscriber: NSObject, ObservableObject {
     @Published var transcript: String = ""
+    @Published var history: [TranscriptionSession] = []
     @Published var isRecording: Bool = false
     @Published var isTranscribing: Bool = false
     @Published var isPreparing: Bool = false
     @Published var selectedAudioURL: URL?
+    
+    private var baseTranscript: String = ""
+    private var previousHypothesis: String = ""
+    private var sessionHistory: [String] = []
     
     private let engine = SpeechEngine()
     private let speechRecognizer = SFSpeechRecognizer()
@@ -503,6 +549,9 @@ private final class IOSSpeechTranscriber: NSObject, ObservableObject {
         cancelTranscription()
         isPreparing = true
         transcript = ""
+        baseTranscript = ""
+        previousHypothesis = ""
+        sessionHistory = []
 
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self = self else { return }
@@ -523,9 +572,13 @@ private final class IOSSpeechTranscriber: NSObject, ObservableObject {
 
             do {
                 await self.logError("startLiveTranscription: starting engine...")
-                try await self.engine.start(onTranscriptUpdate: { text in
+                try await self.engine.start(onResult: { result in
+                    let text = result.bestTranscription.formattedString
+                    let isFinal = result.isFinal
+                    let prefix = "Live"
+                    
                     Task { @MainActor in
-                        self.transcript = text
+                        self.processTranscriptionResult(text: text, isFinal: isFinal, prefix: prefix)
                     }
                 }, onError: { error in
                     Task { @MainActor in
@@ -550,37 +603,84 @@ private final class IOSSpeechTranscriber: NSObject, ObservableObject {
 
     func stopLiveTranscription() async {
         logError("stopLiveTranscription: stopping engine...")
+        let finalTranscript = self.transcript
         await engine.stop()
         await MainActor.run {
+            if !finalTranscript.isEmpty {
+                self.history.append(TranscriptionSession(id: UUID(), text: finalTranscript, timestamp: Date()))
+            }
+            self.transcript = ""
+            self.baseTranscript = ""
+            self.previousHypothesis = ""
             self.isRecording = false
             self.isPreparing = false
         }
     }
 
     func transcribeSelectedAudio() async {
-        guard let url = selectedAudioURL else { return }
-        logError("Transcribing selected audio: \(url.path)...")
+        guard let sourceURL = selectedAudioURL else { return }
+        
+        let accessing = sourceURL.startAccessingSecurityScopedResource()
+        defer { if accessing { sourceURL.stopAccessingSecurityScopedResource() } }
+        
+        logError("Transcribing selected audio: \(sourceURL.path)...")
+        
+        // Copy file to temp location to avoid sandbox/permission issues with SFSpeechURLRecognitionRequest
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempFileName = "transcribe_temp_\(UUID().uuidString).\(sourceURL.pathExtension)"
+        let tempURL = tempDir.appendingPathComponent(tempFileName)
+        
+        do {
+            if FileManager.default.fileExists(atPath: tempURL.path) {
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: tempURL)
+        } catch {
+            logError("Failed to copy audio for transcription: \(error.localizedDescription)")
+            return
+        }
         
         isTranscribing = true
         transcript = ""
         
-        let request = SFSpeechURLRecognitionRequest(url: url)
+        let request = SFSpeechURLRecognitionRequest(url: tempURL)
+        request.shouldReportPartialResults = true
+        if speechRecognizer?.supportsOnDeviceRecognition == true {
+            request.requiresOnDeviceRecognition = true
+        }
+        
         speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             guard let self = self else { return }
             
             if let result = result {
+                let text = result.bestTranscription.formattedString
+                let isFinal = result.isFinal
+                let prefix = "File"
+                
+                self.logError("[\(prefix)] Result isFinal=\(isFinal), text.count=\(text.count)")
+                
                 Task { @MainActor in
-                    self.transcript = result.bestTranscription.formattedString
-                    if result.isFinal {
+                    self.processTranscriptionResult(text: text, isFinal: isFinal, prefix: prefix)
+                    
+                    if isFinal {
+                        self.logError("[File] Transcription finished. Moving to history.")
+                        if !self.transcript.isEmpty {
+                            self.history.append(TranscriptionSession(id: UUID(), text: self.transcript, timestamp: Date()))
+                        }
+                        self.transcript = ""
+                        self.sessionHistory = []
+                        self.previousHypothesis = ""
                         self.isTranscribing = false
+                        try? FileManager.default.removeItem(at: tempURL)
                     }
                 }
             }
             
             if let error = error {
-                logError("File transcription error: \(error.localizedDescription)")
+                self.logError("[File] transcription error: \(error.localizedDescription)")
                 Task { @MainActor in
                     self.isTranscribing = false
+                    try? FileManager.default.removeItem(at: tempURL)
                 }
             }
         }
@@ -608,6 +708,61 @@ private final class IOSSpeechTranscriber: NSObject, ObservableObject {
 
     func clearSelectedAudio() {
         selectedAudioURL = nil
+    }
+
+    private func processTranscriptionResult(text: String, isFinal: Bool, prefix: String) {
+        if isFinal {
+            // Some on-device recognizers send an empty string on final result 
+            // after sending the full text in the last non-final result.
+            let finalToCommit = text.isEmpty ? self.previousHypothesis : text
+            
+            if !finalToCommit.isEmpty {
+                self.logError("[\(prefix)] committing final segment: \"\(finalToCommit.prefix(50))...\"")
+                self.addTextToHistory(finalToCommit)
+            }
+            self.previousHypothesis = ""
+        } else {
+            // Detect if the recognizer reset its buffer (on-device behavior)
+            if !text.isEmpty && !self.previousHypothesis.isEmpty && 
+               text.count < self.previousHypothesis.count / 2 && 
+               !self.previousHypothesis.lowercased().hasPrefix(text.lowercased()) {
+                
+                self.logError("[\(prefix)] reset detected! Committing hypothesis: \"\(self.previousHypothesis.prefix(50))...\"")
+                self.addTextToHistory(self.previousHypothesis)
+            }
+            self.previousHypothesis = text
+        }
+        
+        let combined = (self.sessionHistory + [self.previousHypothesis])
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        self.transcript = combined.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.logError("[\(prefix)] current transcript length: \(self.transcript.count)")
+    }
+
+    private func addTextToHistory(_ text: String) {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.isEmpty { return }
+        
+        let newLower = clean.lowercased()
+        
+        if let lastIndex = sessionHistory.indices.last {
+            let lastLower = sessionHistory[lastIndex].lowercased()
+            
+            // If the last thing we added is contained in the new text, update it 
+            // (on-device often expands its hypothesis)
+            if newLower.contains(lastLower) {
+                sessionHistory[lastIndex] = clean
+                return
+            }
+            
+            // If new text is already in last added segment, skip
+            if lastLower.contains(newLower) {
+                return
+            }
+        }
+        
+        sessionHistory.append(clean)
     }
 }
 
@@ -723,44 +878,33 @@ private struct IOS26TranscriberScreen: View {
             )
             .padding(.horizontal)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(settings.localized("transcriber_result"))
-                        .font(.headline)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(transcriber.history) { session in
+                            transcriptionBoxView(for: session.text)
+                                .id(session.id)
+                        }
 
-                    Text(transcriber.transcript.isEmpty ? "-" : transcriber.transcript)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(minHeight: 140, alignment: .topLeading)
-                        .padding(10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    if !transcriber.transcript.isEmpty {
-                        HStack {
-                            Spacer()
-                            Button {
-                                #if canImport(UIKit)
-                                UIPasteboard.general.string = transcriber.transcript
-                                #endif
-                            } label: {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .frame(width: 44, height: 44)
-                            }
-                            .foregroundStyle(.white)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.white.opacity(0.08))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                            )
+                        if !transcriber.transcript.isEmpty || transcriber.isRecording || transcriber.isPreparing || transcriber.isTranscribing {
+                            transcriptionBoxView(for: transcriber.transcript)
+                                .id("current_box")
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .onChange(of: transcriber.transcript) { _, _ in
+                    withAnimation {
+                        proxy.scrollTo("current_box", anchor: .bottom)
+                    }
+                }
+                .onChange(of: transcriber.history.count) { _, _ in
+                    if let lastId = transcriber.history.last?.id {
+                        withAnimation {
+                            proxy.scrollTo(lastId, anchor: .bottom)
                         }
                     }
                 }
-                .padding(.horizontal)
             }
 
             Spacer(minLength: 0)
@@ -829,6 +973,47 @@ private struct IOS26TranscriberScreen: View {
         }
         .onDisappear {
             transcriber.cleanup()
+        }
+    }
+
+    @ViewBuilder
+    private func transcriptionBoxView(for text: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(text.isEmpty ? (transcriber.isRecording ? "..." : "-") : text)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 120, alignment: .topLeading)
+                .padding(12)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+
+            if !text.isEmpty {
+                HStack {
+                    Spacer()
+                    Button {
+                        #if canImport(UIKit)
+                        UIPasteboard.general.string = text
+                        #endif
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 40, height: 40)
+                    }
+                    .foregroundStyle(.white)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.white.opacity(0.08))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                    )
+                }
+            }
         }
     }
 
