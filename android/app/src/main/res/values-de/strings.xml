@@ -802,6 +802,8 @@
     <string name="chat_now">Jetzt chatten</string>
     <string name="model_system_prompt_label">System-Prompt (pro Modell)</string>
     <string name="model_system_prompt_hint">Wird automatisch angewendet, wenn dieses Modell eine Antwort erzeugt.</string>
+    <string name="agent_tools_label">Tools</string>
+    <string name="agent_tools_description">Aktiviert KI-Agent-Fähigkeiten: Wikipedia-Suche, Hash-Rechner, E-Mail senden, SMS senden und Karten öffnen.</string>
 </resources>
 
 

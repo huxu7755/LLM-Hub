@@ -67,6 +67,7 @@ class LiteRtLmInferenceService(private val applicationContext: Context) : Infere
     private var overrideTopK: Int? = null
     private var overrideTopP: Float? = null
     private var overrideTemperature: Float? = null
+    private var overrideEnableThinking: Boolean = true
 
     private val engineMutex = Mutex()
     private val sessionResetTimes = mutableMapOf<String, Long>()
@@ -86,6 +87,10 @@ class LiteRtLmInferenceService(private val applicationContext: Context) : Infere
         private const val DEFAULT_TOP_K = 40
         private const val DEFAULT_TOP_P = 0.95f
         private const val DEFAULT_TEMPERATURE = 1.0f
+
+        /** Sentinel markers used by ChatComponents.kt to render expandable thinking panel. */
+        const val SENTINEL_THINK = "\u200B\u200BTHINK\u200B\u200B"
+        const val SENTINEL_ENDTHINK = "\u200B\u200BENDTHINK\u200B\u200B"
 
         @JvmStatic
         fun getMaxTokensForModelStatic(model: LLMModel): Int = model.contextWindowSize
@@ -273,7 +278,8 @@ class LiteRtLmInferenceService(private val applicationContext: Context) : Infere
         overrideTopK = topK
         overrideTopP = topP
         overrideTemperature = temperature
-        Log.d(TAG, "Generation params: contextWindow=$contextWindow maxTokens=$maxTokens topK=$topK topP=$topP temperature=$temperature")
+        if (enableThinking != null) overrideEnableThinking = enableThinking
+        Log.d(TAG, "Generation params: contextWindow=$contextWindow maxTokens=$maxTokens topK=$topK topP=$topP temperature=$temperature enableThinking=$enableThinking")
     }
 
     override fun getMemoryWarningForImages(images: List<Bitmap>): String? = null
@@ -287,13 +293,20 @@ class LiteRtLmInferenceService(private val applicationContext: Context) : Infere
         sessionResetTimes[chatId] = System.currentTimeMillis()
     }
 
-    private fun buildConversationConfig(): ConversationConfig = ConversationConfig(
-        samplerConfig = SamplerConfig(
-            topK = overrideTopK ?: DEFAULT_TOP_K,
-            topP = (overrideTopP ?: DEFAULT_TOP_P).toDouble(),
-            temperature = (overrideTemperature ?: DEFAULT_TEMPERATURE).toDouble()
+    private fun isGemma4Model(): Boolean =
+        currentModel?.name?.contains("Gemma-4", ignoreCase = true) == true
+
+    private fun buildConversationConfig(): ConversationConfig {
+        val sysInstruction = if (isGemma4Model() && overrideEnableThinking) Contents.of("<|think|>") else null
+        return ConversationConfig(
+            samplerConfig = SamplerConfig(
+                topK = overrideTopK ?: DEFAULT_TOP_K,
+                topP = (overrideTopP ?: DEFAULT_TOP_P).toDouble(),
+                temperature = (overrideTemperature ?: DEFAULT_TEMPERATURE).toDouble()
+            ),
+            systemInstruction = sysInstruction
         )
-    )
+    }
 
     /**
      * Build a ConversationConfig wired with agent tools and system instruction.
@@ -302,7 +315,8 @@ class LiteRtLmInferenceService(private val applicationContext: Context) : Infere
     @OptIn(ExperimentalApi::class)
     private fun buildAgentConversationConfig(tools: ChatAgentSkillsTools): ConversationConfig {
         val toolProviders: List<ToolProvider> = listOf(tool(tools))
-        val sysInstruction = Contents.of(ChatAgentSkillsTools.AGENT_SYSTEM_PROMPT)
+        val sysText = if (isGemma4Model() && overrideEnableThinking) "<|think|>\n${ChatAgentSkillsTools.AGENT_SYSTEM_PROMPT}" else ChatAgentSkillsTools.AGENT_SYSTEM_PROMPT
+        val sysInstruction = Contents.of(sysText)
         return ConversationConfig(
             samplerConfig = SamplerConfig(
                 topK = overrideTopK ?: DEFAULT_TOP_K,
@@ -436,6 +450,7 @@ class LiteRtLmInferenceService(private val applicationContext: Context) : Infere
             val contents = Contents.of(*contentParts.toTypedArray<Content>())
 
             val localAgentTools = agentTools
+            val useThinking = isGemma4Model() && overrideEnableThinking
             @OptIn(ExperimentalApi::class)
             if (localAgentTools != null) {
                 // Gemma-4 agent mode: enable constrained decoding for reliable function-call
@@ -444,21 +459,49 @@ class LiteRtLmInferenceService(private val applicationContext: Context) : Infere
                 val agentConfig = buildAgentConversationConfig(localAgentTools)
                 ExperimentalFlags.enableConversationConstrainedDecoding = false
                 Log.d(TAG, "Using agent conversation config with ${localAgentTools.javaClass.simpleName}")
+                var sentThinkOpen = false
+                var sentThinkClose = false
                 eng.createConversation(agentConfig).use { conv ->
                     conv.sendMessageAsync(contents).collect { msg ->
                         val chunk = msg.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
-                        val (cleaned, _) = processLlamaStopTokens(chunk)
-                        if (cleaned.isNotEmpty()) emit(cleaned)
+                        val thinkingChunk = if (useThinking) {
+                            try { msg.channels?.get("thought") } catch (_: Exception) { null }
+                        } else null
+                        val isThinking = thinkingChunk != null && thinkingChunk.isNotEmpty()
+                        if (useThinking && isThinking) {
+                            if (!sentThinkOpen) { emit(SENTINEL_THINK); sentThinkOpen = true }
+                            val (cleanedThinking, _) = processLlamaStopTokens(thinkingChunk!!)
+                            if (cleanedThinking.isNotEmpty()) emit(cleanedThinking)
+                        } else {
+                            val (cleaned, _) = processLlamaStopTokens(chunk)
+                            if (sentThinkOpen && !sentThinkClose) { emit(SENTINEL_ENDTHINK); sentThinkClose = true }
+                            if (cleaned.isNotEmpty()) emit(cleaned)
+                        }
                     }
                 }
+                if (useThinking && sentThinkOpen && !sentThinkClose) emit(SENTINEL_ENDTHINK)
             } else {
+                var sentThinkOpen = false
+                var sentThinkClose = false
                 eng.createConversation(buildConversationConfig()).use { conv ->
                     conv.sendMessageAsync(contents).collect { msg ->
                         val chunk = msg.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
-                        val (cleaned, _) = processLlamaStopTokens(chunk)
-                        if (cleaned.isNotEmpty()) emit(cleaned)
+                        val thinkingChunk = if (useThinking) {
+                            try { msg.channels?.get("thought") } catch (_: Exception) { null }
+                        } else null
+                        val isThinking = thinkingChunk != null && thinkingChunk.isNotEmpty()
+                        if (useThinking && isThinking) {
+                            if (!sentThinkOpen) { emit(SENTINEL_THINK); sentThinkOpen = true }
+                            val (cleanedThinking, _) = processLlamaStopTokens(thinkingChunk!!)
+                            if (cleanedThinking.isNotEmpty()) emit(cleanedThinking)
+                        } else {
+                            val (cleaned, _) = processLlamaStopTokens(chunk)
+                            if (sentThinkOpen && !sentThinkClose) { emit(SENTINEL_ENDTHINK); sentThinkClose = true }
+                            if (cleaned.isNotEmpty()) emit(cleaned)
+                        }
                     }
                 }
+                if (useThinking && sentThinkOpen && !sentThinkClose) emit(SENTINEL_ENDTHINK)
             }
 
         }.flowOn(Dispatchers.IO)
@@ -494,4 +537,5 @@ class LiteRtLmInferenceService(private val applicationContext: Context) : Infere
             .replace("<|end_header_id|>", "")
         return Pair(cleaned, shouldStop)
     }
+
 }

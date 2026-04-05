@@ -838,6 +838,8 @@
     <string name="chat_now">Chat sekarang</string>
     <string name="model_system_prompt_label">Prompt sistem (per model)</string>
     <string name="model_system_prompt_hint">Diterapkan secara otomatis saat model ini menghasilkan respons.</string>
+    <string name="agent_tools_label">Alat</string>
+    <string name="agent_tools_description">Mengaktifkan keahlian agen AI: pencarian Wikipedia, kalkulator hash, kirim email, kirim SMS, dan buka peta.</string>
 </resources>
 
 

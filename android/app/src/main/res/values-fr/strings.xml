@@ -823,8 +823,8 @@
     <string name="feature_vibevoice_desc">Chat vocal avec IA en local</string>
     <string name="chat_now">Discuter maintenant</string>
     <string name="model_system_prompt_label">Invite système (par modèle)</string>
-    <string name="model_system_prompt_hint">S’applique automatiquement lorsque ce modèle génère une réponse.</string>
-</resources>
+    <string name="model_system_prompt_hint">S’applique automatiquement lorsque ce modèle génère une réponse.</string>    <string name="agent_tools_label">Outils</string>
+    <string name="agent_tools_description">Active les compétences de l\'agent IA : recherche Wikipédia, calculateur de hash, envoyer un e-mail, envoyer un SMS et ouvrir des cartes.</string></resources>
 
 
 

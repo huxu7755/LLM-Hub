@@ -2563,6 +2563,10 @@ inferenceService.loadModel(currentModel!!, _selectedBackend.value, _selectedNpuD
         }
     }
 
+    fun setAgentToolsEnabled(enabled: Boolean) {
+        (inferenceService as? com.llmhub.llmhub.inference.UnifiedInferenceService)?.setAgentToolsEnabled(enabled)
+    }
+
     private suspend fun applyPerModelSystemPrompt(prompt: String, model: LLMModel?): String {
         val m = model ?: return prompt
         return try {

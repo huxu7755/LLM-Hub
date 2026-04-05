@@ -835,6 +835,8 @@
     <string name="chat_now">ابدأ الدردشة</string>
     <string name="model_system_prompt_label">تعليمات النظام (لكل نموذج)</string>
     <string name="model_system_prompt_hint">تُطبّق تلقائيًا عند قيام هذا النموذج بإنشاء رد.</string>
+    <string name="agent_tools_label">الأدوات</string>
+    <string name="agent_tools_description">يُفعِّل مهارات وكيل الذكاء الاصطناعي: البحث في ويكيبيديا، حاسبة التجزئة، إرسال البريد الإلكتروني، إرسال رسالة نصية، وفتح الخرائط.</string>
 </resources>
 
 

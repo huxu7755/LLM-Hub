@@ -20,7 +20,8 @@ data class ModelConfig(
     val nGpuLayers: Int = 999, // layers offloaded to GPU/NPU (GGUF/Nexa SDK only)
     val enableThinking: Boolean = true, // whether thinking/reasoning output is enabled
     val systemPrompt: String = "", // optional per-model system prompt injected for chat generation
-    val contextWindow: Int = 0 // KV cache allocation (context window size); 0 = use model default
+    val contextWindow: Int = 0, // KV cache allocation (context window size); 0 = use model default
+    val agentToolsEnabled: Boolean = true // whether Gemma-4 agent tools are active
 ) {
     fun toJson(): JSONObject {
         val obj = JSONObject()
@@ -37,6 +38,7 @@ data class ModelConfig(
         obj.put("enableThinking", enableThinking)
         obj.put("systemPrompt", systemPrompt)
         obj.put("contextWindow", contextWindow)
+        obj.put("agentToolsEnabled", agentToolsEnabled)
         return obj
     }
 
@@ -54,7 +56,8 @@ data class ModelConfig(
                 nGpuLayers = obj.optInt("nGpuLayers", 999),
                 enableThinking = obj.optBoolean("enableThinking", true),
                 systemPrompt = obj.optString("systemPrompt", ""),
-                contextWindow = obj.optInt("contextWindow", 0)
+                contextWindow = obj.optInt("contextWindow", 0),
+                agentToolsEnabled = obj.optBoolean("agentToolsEnabled", true)
             )
         }
     }

@@ -840,6 +840,8 @@
     <string name="chat_now">Czatuj teraz</string>
     <string name="model_system_prompt_label">Prompt systemowy (na model)</string>
     <string name="model_system_prompt_hint">Stosowany automatycznie, gdy ten model generuje odpowiedź.</string>
+    <string name="agent_tools_label">Narzędzia</string>
+    <string name="agent_tools_description">Włącza umiejętności agenta AI: wyszukiwanie Wikipedia, kalkulator skrótu, wysyłanie e-maila, wysyłanie SMS i otwieranie map.</string>
 </resources>
 
 

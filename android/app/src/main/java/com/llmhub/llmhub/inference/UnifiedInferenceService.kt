@@ -213,8 +213,15 @@ class UnifiedInferenceService(private val context: Context) : InferenceService {
      * Tools are enabled only for Gemma-4 models because they are specifically trained
      * for function calling via the LiteRT-LM SDK. All other models get tools cleared.
      */
+    private var agentToolsEnabled: Boolean = true
+
+    fun setAgentToolsEnabled(enabled: Boolean) {
+        agentToolsEnabled = enabled
+        currentModel?.let { updateAgentTools(it) }
+    }
+
     private fun updateAgentTools(model: LLMModel) {
-        if (model.modelFormat == "litertlm" && model.name.contains("Gemma-4", ignoreCase = true)) {
+        if (agentToolsEnabled && model.modelFormat == "litertlm" && model.name.contains("Gemma-4", ignoreCase = true)) {
             liteRtLmService.setAgentTools(ChatAgentSkillsTools(context))
         } else {
             liteRtLmService.setAgentTools(null)

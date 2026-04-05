@@ -403,6 +403,8 @@
     
     <!-- GPU with Audio Only Disabled for Gemma-3n E4B on 8GB devices -->
     <string name="gpu_with_audio_disabled">GPU (Audio Disabled)</string>
+    <string name="agent_tools_label">Tools</string>
+    <string name="agent_tools_description">Enables AI agent skills: Wikipedia search, hash calculator, send email, send SMS, and open maps.</string>
     <string name="gemma3n_e4b_gpu_audio_warning">For devices with 7-8GB RAM, GPU acceleration requires disabling audio features. Audio input will not be available, but image attachments are supported.</string>
     <string name="audio_disabled_for_gpu">Audio disabled for GPU acceleration</string>
     <string name="audio_disabled_no_audio">Audio features are disabled for this model configuration. Audio input is not available, but image attachments are supported.</string>

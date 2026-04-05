@@ -789,4 +789,6 @@
     <string name="feature_vibevoice">Chat de voz</string>
     <string name="feature_vibevoice_desc">Chat de voz com IA local</string>
     <string name="chat_now">Conversar agora</string>
+    <string name="agent_tools_label">Ferramentas</string>
+    <string name="agent_tools_description">Ativa as habilidades do agente de IA: pesquisa na Wikipedia, calculadora de hash, enviar e-mail, enviar SMS e abrir mapas.</string>
 </resources>

@@ -43,7 +43,7 @@ fun ChatSettingsSheet(
     isLoadingModel: Boolean,
     onModelSelected: (LLMModel) -> Unit,
     onBackendSelected: (LlmInference.Backend, String?) -> Unit,
-    onLoadModel: (model: LLMModel, maxTokens: Int, topK: Int, topP: Float, temperature: Float, backend: LlmInference.Backend?, deviceId: String?, disableVision: Boolean, disableAudio: Boolean, nGpuLayers: Int, enableThinking: Boolean, contextWindow: Int) -> Unit,
+    onLoadModel: (model: LLMModel, maxTokens: Int, topK: Int, topP: Float, temperature: Float, backend: LlmInference.Backend?, deviceId: String?, disableVision: Boolean, disableAudio: Boolean, nGpuLayers: Int, enableThinking: Boolean, contextWindow: Int, enableAgentTools: Boolean) -> Unit,
     onUnloadModel: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -70,6 +70,12 @@ fun ChatSettingsSheet(
     // Gemma-3n detection (used for modality toggles)
     val isGemma3nModel = remember(selectedModel) {
         selectedModel?.name?.contains("Gemma-3n", ignoreCase = true) == true
+    }
+
+    // Gemma-4 with LiteRT-LM: enables agent tools toggle
+    val isGemma4Model = remember(selectedModel) {
+        selectedModel?.name?.contains("Gemma-4", ignoreCase = true) == true &&
+            selectedModel?.modelFormat == "litertlm"
     }
 
     val isLiteRtLm = remember(selectedModel) { selectedModel?.modelFormat == "litertlm" }
@@ -122,6 +128,7 @@ fun ChatSettingsSheet(
     var disableVision by remember { mutableStateOf(isGemma3nModel) }
     var disableAudio by remember { mutableStateOf(isGemma3nModel) }
     var enableThinking by remember { mutableStateOf(true) }
+    var agentToolsEnabled by remember { mutableStateOf(true) }
     var systemPromptText by remember { mutableStateOf("") }
 
     val selectedModelSupportsVisionInput by remember(selectedModel, context) {
@@ -139,7 +146,8 @@ fun ChatSettingsSheet(
                 model.name.contains("Thinking", ignoreCase = true) ||
                 model.name.contains("Reasoning", ignoreCase = true) ||
                 model.name.contains("gpt-oss", ignoreCase = true) ||
-                model.name.contains("gpt_oss", ignoreCase = true)
+                model.name.contains("gpt_oss", ignoreCase = true) ||
+                (model.name.contains("Gemma-4", ignoreCase = true) && model.modelFormat == "litertlm")
             } == true
         }
     }
@@ -175,6 +183,7 @@ fun ChatSettingsSheet(
                     disableAudio = saved.disableAudio
                     gpuLayers = saved.nGpuLayers
                     enableThinking = saved.enableThinking
+                    agentToolsEnabled = saved.agentToolsEnabled
                     systemPromptText = saved.systemPrompt
                 } else {
                     // Reset to defaults for new model
@@ -193,6 +202,7 @@ fun ChatSettingsSheet(
                     disableVision = newIsGemma3n || !selectedModelSupportsVisionInput
                     disableAudio = newIsGemma3n
                     enableThinking = true
+                    agentToolsEnabled = true
                     systemPromptText = ""
                 }
             } catch (e: Exception) {
@@ -212,6 +222,7 @@ fun ChatSettingsSheet(
                 disableVision = newIsGemma3n || !selectedModelSupportsVisionInput
                 disableAudio = newIsGemma3n
                 enableThinking = true
+                agentToolsEnabled = true
                 systemPromptText = ""
             }
         }
@@ -541,6 +552,7 @@ fun ChatSettingsSheet(
                                                     disableAudio = disableAudio,
                                                     nGpuLayers = gpuLayers,
                                                     enableThinking = enableThinking,
+                                                    agentToolsEnabled = agentToolsEnabled,
                                                     systemPrompt = systemPromptText.trim(),
                                                     contextWindow = finalCtxWindow
                                                 )
@@ -548,7 +560,7 @@ fun ChatSettingsSheet(
                                             } catch (_: Exception) {}
                                         }
                                         
-                                        onLoadModel(model, finalMax, topK, topP, temperature, backend, deviceId, disableVision, disableAudio, gpuLayers, enableThinking, finalCtxWindow)
+                                        onLoadModel(model, finalMax, topK, topP, temperature, backend, deviceId, disableVision, disableAudio, gpuLayers, enableThinking, finalCtxWindow, agentToolsEnabled)
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -837,6 +849,29 @@ fun ChatSettingsSheet(
                             }
                         }
 
+                        // Agent tools toggle (Gemma-4 with LiteRT-LM only)
+                        if (isGemma4Model) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.agent_tools_label),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Switch(
+                                    checked = agentToolsEnabled,
+                                    onCheckedChange = { agentToolsEnabled = it }
+                                )
+                            }
+                            Text(
+                                text = stringResource(R.string.agent_tools_description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
                         // Per-model system prompt
                         Text(
                             text = stringResource(R.string.model_system_prompt_label),
@@ -891,6 +926,7 @@ fun ChatSettingsSheet(
                                     disableVision = newIsGemma3n || !selectedModelSupportsVisionInput
                                     disableAudio = newIsGemma3n
                                     enableThinking = true
+                                    agentToolsEnabled = true
                                     systemPromptText = ""
                                 }
                             },

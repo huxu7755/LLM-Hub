@@ -807,6 +807,8 @@
     <string name="chat_now">Chatear ahora</string>
     <string name="model_system_prompt_label">Prompt del sistema (por modelo)</string>
     <string name="model_system_prompt_hint">Se aplica automáticamente cuando este modelo genera una respuesta.</string>
+    <string name="agent_tools_label">Herramientas</string>
+    <string name="agent_tools_description">Activa las habilidades del agente de IA: búsqueda en Wikipedia, calculadora de hash, enviar correo electrónico, enviar SMS y abrir mapas.</string>
 </resources>
 
 

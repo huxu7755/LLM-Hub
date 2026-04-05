@@ -835,6 +835,8 @@
     <string name="chat_now">צ׳אט עכשיו</string>
     <string name="model_system_prompt_label">הנחיית מערכת (לכל מודל)</string>
     <string name="model_system_prompt_hint">מוחל אוטומטית כאשר המודל הזה יוצר תשובה.</string>
+    <string name="agent_tools_label">כלים</string>
+    <string name="agent_tools_description">מפעיל מיומנויות סוכן AI: חיפוש בוויקיפדיה, מחשבון hash, שליחת אימייל, שליחת SMS ופתיחת מפות.</string>
 </resources>
 
 

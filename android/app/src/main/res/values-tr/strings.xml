@@ -833,6 +833,8 @@
     <string name="chat_now">Şimdi sohbet et</string>
     <string name="model_system_prompt_label">Sistem istemi (model başına)</string>
     <string name="model_system_prompt_hint">Bu model yanıt oluşturduğunda otomatik olarak uygulanır.</string>
+    <string name="agent_tools_label">Araçlar</string>
+    <string name="agent_tools_description">Yapay zeka ajanı becerilerini etkinleştirir: Wikipedia arama, karma hesaplayıcı, e-posta gönderme, SMS gönderme ve harita açma.</string>
 </resources>
 
 

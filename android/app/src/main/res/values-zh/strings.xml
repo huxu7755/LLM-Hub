@@ -844,4 +844,6 @@
     <string name="chat_now">立即聊天</string>
     <string name="model_system_prompt_label">系统提示词（按模型）</string>
     <string name="model_system_prompt_hint">当该模型生成回复时会自动应用。</string>
+    <string name="agent_tools_label">工具</string>
+    <string name="agent_tools_description">启用 AI 代理技能：Wikipedia 搜索、哈希计算器、发送邮件、发送短信和打开地图。</string>
 </resources>

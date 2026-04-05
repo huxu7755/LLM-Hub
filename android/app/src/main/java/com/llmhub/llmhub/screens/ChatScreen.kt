@@ -463,8 +463,8 @@ fun ChatScreen(
             onBackendSelected = { backend, deviceId ->
                 viewModel.selectBackend(backend, deviceId)
             },
-            onLoadModel = { model, maxTokens, topK, topP, temperature, backend, deviceId, disableVision, disableAudio, nGpuLayers, enableThinking, contextWindow ->
-                Log.d("ChatScreen", "Model configs confirmed: maxTokens=$maxTokens contextWindow=$contextWindow topK=$topK topP=$topP temperature=$temperature backend=$backend deviceId=$deviceId disableVision=$disableVision disableAudio=$disableAudio nGpuLayers=$nGpuLayers enableThinking=$enableThinking for model ${model.name}")
+            onLoadModel = { model, maxTokens, topK, topP, temperature, backend, deviceId, disableVision, disableAudio, nGpuLayers, enableThinking, contextWindow, enableAgentTools ->
+                Log.d("ChatScreen", "Model configs confirmed: maxTokens=$maxTokens contextWindow=$contextWindow topK=$topK topP=$topP temperature=$temperature backend=$backend deviceId=$deviceId disableVision=$disableVision disableAudio=$disableAudio nGpuLayers=$nGpuLayers enableThinking=$enableThinking enableAgentTools=$enableAgentTools for model ${model.name}")
 
                 showSettingsSheet = false
 
@@ -482,6 +482,7 @@ fun ChatScreen(
                     }
                 }
 
+                viewModel.setAgentToolsEnabled(enableAgentTools)
                 doLoad()
             },
             onUnloadModel = {
