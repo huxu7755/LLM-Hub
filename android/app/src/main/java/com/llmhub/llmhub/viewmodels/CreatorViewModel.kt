@@ -334,6 +334,8 @@ class CreatorViewModel(
                 """.trimIndent()
 
                 applyGenerationParametersToService()
+                // Reset GGUF KV cache so same prompt submitted again doesn't produce 0 tokens
+                inferenceService.resetChatSession("creator-session")
                 val response = inferenceService.generateResponse(metaPrompt, model)
                 
                 val parsedCreator = parseResponse(response, userPrompt)

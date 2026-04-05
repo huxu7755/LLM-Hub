@@ -371,6 +371,9 @@ class ScamDetectorViewModel(application: Application) : AndroidViewModel(applica
                 // Use unique chatId for each analysis session
                 val chatId = "scam-detector-${UUID.randomUUID()}"
                 
+                // Reset GGUF KV cache so same prompt submitted again doesn't produce 0 tokens
+                inferenceService.resetChatSession(chatId)
+                
                 // Generate analysis using inference service
                 val responseFlow = inferenceService.generateResponseStreamWithSession(
                     prompt = prompt,

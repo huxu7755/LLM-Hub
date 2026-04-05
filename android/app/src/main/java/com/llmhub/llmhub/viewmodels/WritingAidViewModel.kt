@@ -282,6 +282,9 @@ class WritingAidViewModel(application: Application) : AndroidViewModel(applicati
                 // Use unique chatId for each session to avoid conflicts (like TranslatorViewModel)
                 val chatId = "writing-aid-${UUID.randomUUID()}"
                 
+                // Reset GGUF KV cache so same prompt submitted again doesn't produce 0 tokens
+                inferenceService.resetChatSession(chatId)
+                
                 val responseFlow = inferenceService.generateResponseStreamWithSession(
                     prompt = prompt,
                     model = model,
