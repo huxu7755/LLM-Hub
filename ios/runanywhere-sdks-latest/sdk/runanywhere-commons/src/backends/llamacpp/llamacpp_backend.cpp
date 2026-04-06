@@ -534,6 +534,26 @@ std::string LlamaCppTextGeneration::apply_chat_template(
             result = -1;
         }
         if (result < 0) {
+            // For Gemma architectures (gemma3, gemma4, etc.) we hardcode the known
+            // <start_of_turn> format since neither the model's Jinja template nor the
+            // "gemma3" built-in reliably work for newer Gemma variants.
+            bool is_gemma = !model_arch.empty() && model_arch.find("gemma") != std::string::npos;
+            if (is_gemma) {
+                LOGI("All templates failed for Gemma arch=%s, building <start_of_turn> prompt directly",
+                     model_arch.c_str());
+                std::string gemma_prompt;
+                for (const auto& msg : chat_messages) {
+                    std::string role(msg.role);
+                    // Map "assistant" -> "model" as Gemma expects
+                    std::string gemma_role = (role == "assistant") ? "model" : role;
+                    gemma_prompt += "<start_of_turn>" + gemma_role + "\n";
+                    gemma_prompt += std::string(msg.content) + "<end_of_turn>\n";
+                }
+                if (add_assistant_token) {
+                    gemma_prompt += "<start_of_turn>model\n";
+                }
+                return gemma_prompt;
+            }
             // Last-resort: basic role: content fallback
             LOGI("Auto-detect template also failed, using basic text fallback");
             std::string fallback;

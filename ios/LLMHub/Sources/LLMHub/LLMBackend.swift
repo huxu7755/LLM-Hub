@@ -217,11 +217,10 @@ class LLMBackend: ObservableObject {
         let stem = familyStem(from: model.name)
         let quantTag = quantizationTag(from: model.name)
 
-        let candidates = ModelData.models.filter {
-            $0.isDependencyOnly
-                && $0.inferenceFramework == model.inferenceFramework
-                && isModelAvailableLocally($0)
-        }
+        let allDependencyModels = ModelData.models.filter { $0.isDependencyOnly && $0.inferenceFramework == model.inferenceFramework }
+        let candidates = allDependencyModels.filter { isModelAvailableLocally($0) }
+
+        print("[LLMBackend] resolveVisionProjectorPath model=\(model.name) stem='\(stem)' quantTag=\(quantTag ?? "nil") totalDeps=\(allDependencyModels.count) downloadedDeps=\(candidates.count) downloadedNames=\(candidates.map(\.name))")
 
         let scored = candidates.compactMap { candidate -> (score: Int, path: String)? in
             let candidateName = candidate.name.lowercased()
@@ -256,7 +255,16 @@ class LLMBackend: ObservableObject {
             return lhs.score > rhs.score
         }
 
-        return scored.first?.path
+        print("[LLMBackend] resolveVisionProjectorPath scored=\(scored.map { "score=\($0.score) path=\($0.path)" })")
+        // Require a minimum score of 3 (stem match) to avoid cross-family projector matches.
+        // A score of 1 (only mmproj keyword) is not enough — the projector must belong to the same model family.
+        return scored.first(where: { $0.score >= 3 })?.path
+    }
+
+    func isVisionProjectorAvailable(for model: AIModel) -> Bool {
+        let path = resolveVisionProjectorPath(for: model)
+        print("[LLMBackend] isVisionProjectorAvailable model=\(model.name) result=\(path != nil) path=\(path ?? "nil")")
+        return path != nil
     }
 
     private func ensureVLMLoaded(for model: AIModel) async throws {
@@ -571,7 +579,8 @@ class LLMBackend: ObservableObject {
         if let imageURL,
            enableVision,
            let model = loadedAIModel(),
-           model.supportsVision {
+           model.supportsVision,
+           isVisionProjectorAvailable(for: model) {
             try await ensureVLMLoaded(for: model)
 
             let image = vlmImage(from: imageURL)
