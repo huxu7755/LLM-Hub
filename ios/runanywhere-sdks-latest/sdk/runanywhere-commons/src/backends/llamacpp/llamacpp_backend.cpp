@@ -104,6 +104,24 @@ static size_t strip_gemma_leading_artifacts(std::string& text) {
     return stripped_count;
 }
 
+static bool sanitize_initial_generated_chunk(std::string& text, bool& has_emitted_visible_output,
+                                             const char* log_prefix) {
+    if (!has_emitted_visible_output) {
+        const size_t stripped_count = strip_gemma_leading_artifacts(text);
+        if (stripped_count > 0) {
+            LOGI("%s stripped %zu leading Gemma artifact(s) at emission boundary",
+                 log_prefix, stripped_count);
+        }
+    }
+
+    if (text.empty()) {
+        return false;
+    }
+
+    has_emitted_visible_output = true;
+    return true;
+}
+
 // =============================================================================
 // LOG CALLBACK
 // =============================================================================
@@ -854,6 +872,7 @@ bool LlamaCppTextGeneration::generate_stream(const TextGenerationRequest& reques
     std::string leading_output_buffer;
     leading_output_buffer.reserve(64);
     bool leading_output_committed = false;
+    bool has_emitted_visible_output = false;
 
     int n_cur = batch.n_tokens;
     int tokens_generated = 0;
@@ -927,7 +946,10 @@ bool LlamaCppTextGeneration::generate_stream(const TextGenerationRequest& reques
                     LOGI("Stop sequence detected");
                     stop_sequence_hit = true;
                     if (found_stop_pos > 0) {
-                        if (!callback(stop_window.substr(0, found_stop_pos))) {
+                        std::string chunk = stop_window.substr(0, found_stop_pos);
+                        if (sanitize_initial_generated_chunk(chunk, has_emitted_visible_output,
+                                                             "generate_stream:") &&
+                            !callback(chunk)) {
                             cancel_requested_.store(true);
                         }
                     }
@@ -936,7 +958,10 @@ bool LlamaCppTextGeneration::generate_stream(const TextGenerationRequest& reques
 
                 if (stop_window.size() > MAX_STOP_LEN) {
                     size_t safe_len = stop_window.size() - MAX_STOP_LEN;
-                    if (!callback(stop_window.substr(0, safe_len))) {
+                    std::string chunk = stop_window.substr(0, safe_len);
+                    if (sanitize_initial_generated_chunk(chunk, has_emitted_visible_output,
+                                                         "generate_stream:") &&
+                        !callback(chunk)) {
                         LOGI("Generation cancelled by callback");
                         cancel_requested_.store(true);
                         break;
@@ -970,7 +995,10 @@ bool LlamaCppTextGeneration::generate_stream(const TextGenerationRequest& reques
     }
 
     if (!cancel_requested_.load() && !stop_sequence_hit && !stop_window.empty()) {
-        callback(stop_window);
+        std::string chunk = stop_window;
+        if (sanitize_initial_generated_chunk(chunk, has_emitted_visible_output, "generate_stream:")) {
+            callback(chunk);
+        }
     }
 
     if (llama_memory_t post_mem = llama_get_memory(context_)) {
@@ -1198,6 +1226,7 @@ TextGenerationResult LlamaCppTextGeneration::generate_from_context(const TextGen
     std::string leading_output_buffer;
     leading_output_buffer.reserve(64);
     bool leading_output_committed = false;
+    bool has_emitted_visible_output = false;
 
     std::string generated_text;
     int n_cur = static_cast<int>(current_pos) + n_prompt;
@@ -1288,14 +1317,22 @@ TextGenerationResult LlamaCppTextGeneration::generate_from_context(const TextGen
                 if (found_stop_pos != std::string::npos) {
                     stop_sequence_hit = true;
                     if (found_stop_pos > 0) {
-                        generated_text += stop_window.substr(0, found_stop_pos);
+                        std::string chunk = stop_window.substr(0, found_stop_pos);
+                        if (sanitize_initial_generated_chunk(chunk, has_emitted_visible_output,
+                                                             "generate_from_context:")) {
+                            generated_text += chunk;
+                        }
                     }
                     break;
                 }
 
                 if (stop_window.size() > MAX_STOP_LEN) {
                     const size_t safe_len = stop_window.size() - MAX_STOP_LEN;
-                    generated_text += stop_window.substr(0, safe_len);
+                    std::string chunk = stop_window.substr(0, safe_len);
+                    if (sanitize_initial_generated_chunk(chunk, has_emitted_visible_output,
+                                                         "generate_from_context:")) {
+                        generated_text += chunk;
+                    }
                     stop_window.erase(0, safe_len);
                 }
             }
@@ -1325,7 +1362,11 @@ TextGenerationResult LlamaCppTextGeneration::generate_from_context(const TextGen
     }
 
     if (!cancel_requested_.load() && !stop_sequence_hit && !stop_window.empty()) {
-        generated_text += stop_window;
+        std::string chunk = stop_window;
+        if (sanitize_initial_generated_chunk(chunk, has_emitted_visible_output,
+                                             "generate_from_context:")) {
+            generated_text += chunk;
+        }
     }
 
     llama_batch_free(batch);
