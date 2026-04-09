@@ -144,6 +144,11 @@ public struct AIModel: Identifiable, Codable, Sendable {
         modelFormat == .coreml && category == .imageGeneration
     }
 
+    public var imageGenerationResolution: Int? {
+        guard isCoreMLImageGeneration else { return nil }
+        return id.contains("sdxl") ? 768 : 512
+    }
+
     public var isDependencyOnly: Bool {
         let lowerName = name.lowercased()
         let lowerURL = url.lowercased()

@@ -4632,7 +4632,7 @@ struct ImageGeneratorScreen: View {
         let prompt = promptText
         let steps = Int(storedSteps)
         let denoiseStrength = Float(storedDenoiseStrength)
-        let inputCGImage = selectedModelSupportsImageToImage ? inputImage?.cgImage : nil
+        let startingImage = selectedModelSupportsImageToImage ? inputImage : nil
 
         generateTask?.cancel()
         generateTask = Task {
@@ -4642,7 +4642,7 @@ struct ImageGeneratorScreen: View {
                     prompt: prompt,
                     steps: steps,
                     seed: genSeed,
-                    inputImage: inputCGImage,
+                    inputImage: startingImage,
                     denoiseStrength: denoiseStrength
                 )
                 if let img {

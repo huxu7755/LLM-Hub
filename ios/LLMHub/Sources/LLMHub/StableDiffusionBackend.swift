@@ -10,6 +10,7 @@ enum SDError: LocalizedError {
     case notCoreMLModel
     case modelNotDownloaded
     case pipelineNotLoaded
+    case imageToImageUnsupported
     case unavailable
 
     var errorDescription: String? {
@@ -17,6 +18,7 @@ enum SDError: LocalizedError {
         case .notCoreMLModel: return "Not a CoreML image generation model."
         case .modelNotDownloaded: return "Model files not found. Please download the model first."
         case .pipelineNotLoaded: return "Stable Diffusion pipeline is not loaded."
+        case .imageToImageUnsupported: return "Image-to-image is not supported by this downloaded model bundle on iPhone."
         case .unavailable: return "Stable Diffusion is not available in this build."
         }
     }
@@ -45,6 +47,7 @@ final class StableDiffusionBackend: ObservableObject {
     @Published var loadedModelId: String? = nil
 
     nonisolated(unsafe) private var pipeline: StableDiffusionPipeline?
+    private var loadedWithANE = false
 
     private init() {}
 
@@ -66,29 +69,105 @@ final class StableDiffusionBackend: ObservableObject {
 
     static func supportsImageToImage(modelId: String) -> Bool {
         guard let dir = sdModelDirectory(for: modelId) else { return false }
-        return FileManager.default.fileExists(atPath: dir.appendingPathComponent("VAEEncoder.mlmodelc").path)
+        guard FileManager.default.fileExists(atPath: dir.appendingPathComponent("VAEEncoder.mlmodelc").path) else {
+            return false
+        }
+        // Apple official split-einsum iPhone/iPad bundles expose VAEEncoder, but the
+        // encoder path still fails on-device for the current catalog. Keep img2img
+        // hidden unless a non-split bundle is added and verified to work.
+        return !modelId.contains("split-einsum")
     }
 
+    /// Strips pre-compiled ANE / espresso artifacts from all .mlmodelc bundles in `directory`.
+    /// Called at download time *and* at load time so models downloaded before this fix
+    /// are also cleaned up without requiring a re-download.
+    static func stripStaleArtifacts(in directory: URL) {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        let stalePatterns = [
+            "model.espresso.net",
+            "model.espresso.shape",
+            "model.espresso.weights",
+            "coreml_model.espresso.net",
+            "coreml_model.espresso.shape",
+            "coreml_model.espresso.weights",
+        ]
+
+        for case let url as URL in enumerator {
+            guard url.pathExtension == "mlmodelc",
+                  (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            else { continue }
+            enumerator.skipDescendants()
+            for pattern in stalePatterns {
+                let target = url.appendingPathComponent(pattern)
+                if fm.fileExists(atPath: target.path) {
+                    try? fm.removeItem(at: target)
+                }
+            }
+        }
+    }
+
+#if canImport(UIKit)
+    private static func preparedStartingImage(_ image: UIImage, modelId: String?) -> CGImage? {
+        let model = modelId.flatMap { id in ModelData.models.first(where: { $0.id == id }) }
+        let sideLength = CGFloat(model?.imageGenerationResolution ?? 512)
+        let canvasSize = CGSize(width: sideLength, height: sideLength)
+
+        let sourceImage = image.cgImage.map { UIImage(cgImage: $0, scale: image.scale, orientation: image.imageOrientation) } ?? image
+        let sourceSize = sourceImage.size
+        guard sourceSize.width > 0, sourceSize.height > 0 else { return sourceImage.cgImage }
+
+        let scale = max(canvasSize.width / sourceSize.width, canvasSize.height / sourceSize.height)
+        let scaledSize = CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+        let drawRect = CGRect(
+            x: (canvasSize.width - scaledSize.width) / 2,
+            y: (canvasSize.height - scaledSize.height) / 2,
+            width: scaledSize.width,
+            height: scaledSize.height
+        )
+
+        let renderer = UIGraphicsImageRenderer(size: canvasSize)
+        return renderer.image { _ in
+            sourceImage.draw(in: drawRect)
+        }.cgImage
+    }
+#endif
+
     func loadModel(_ model: AIModel) async throws {
+        try await loadModel(model, preferANE: model.id.contains("split-einsum"))
+    }
+
+    private func loadModel(_ model: AIModel, preferANE: Bool) async throws {
         guard model.isCoreMLImageGeneration else { throw SDError.notCoreMLModel }
         guard let dir = StableDiffusionBackend.sdModelDirectory(for: model.id),
               FileManager.default.fileExists(atPath: dir.appendingPathComponent("_downloaded").path)
         else { throw SDError.modelNotDownloaded }
 
-        if loadedModelId == model.id && isLoaded { return }
+        if loadedModelId == model.id && isLoaded && loadedWithANE == preferANE { return }
 
         isLoading = true
         isLoaded = false
         pipeline = nil
         loadedModelId = nil
+        loadedWithANE = false
 
         let modelDir = dir
-        let useANE = model.id.contains("split-einsum")
+        let useANE = preferANE
+
+        // Strip any stale ANE artifacts present in models downloaded before this fix.
+        // This is a no-op when the artifacts are already absent.
+        Self.stripStaleArtifacts(in: modelDir)
 
         do {
             let wrapper = try await Self.loadPipeline(from: modelDir, useANE: useANE)
             pipeline = wrapper.value
             loadedModelId = model.id
+            loadedWithANE = useANE
             isLoaded = true
         } catch {
             isLoading = false
@@ -119,17 +198,37 @@ final class StableDiffusionBackend: ObservableObject {
     func unloadModel() {
         pipeline = nil
         loadedModelId = nil
+        loadedWithANE = false
         isLoaded = false
         isGenerating = false
+    }
+
+    private func ensurePipelineConfiguration(for inputImage: UIImage?) async throws {
+        guard let loadedModelId,
+              let model = ModelData.models.first(where: { $0.id == loadedModelId })
+        else { return }
+
+        let needsEncoderSafeComputeUnits = inputImage != nil && model.id.contains("split-einsum")
+        let preferredANE = !needsEncoderSafeComputeUnits && model.id.contains("split-einsum")
+
+        if !isLoaded || self.loadedWithANE != preferredANE {
+            try await loadModel(model, preferANE: preferredANE)
+        }
     }
 
     func generateImage(
         prompt: String,
         steps: Int,
         seed: UInt32,
-        inputImage: CGImage? = nil,
+        inputImage: UIImage? = nil,
         denoiseStrength: Float = 0.7
     ) async throws -> UIImage? {
+        if inputImage != nil,
+           let loadedModelId,
+           !Self.supportsImageToImage(modelId: loadedModelId) {
+            throw SDError.imageToImageUnsupported
+        }
+        try await ensurePipelineConfiguration(for: inputImage)
         guard let pipeline else { throw SDError.pipelineNotLoaded }
 
         generationStep = 0
@@ -144,7 +243,11 @@ final class StableDiffusionBackend: ObservableObject {
         config.guidanceScale = 7.5
         config.schedulerType = .dpmSolverMultistepScheduler
         if let inputImage {
-            config.startingImage = inputImage
+    #if canImport(UIKit)
+            config.startingImage = Self.preparedStartingImage(inputImage, modelId: loadedModelId)
+    #else
+            config.startingImage = inputImage.cgImage
+    #endif
             config.strength = denoiseStrength
             // mode is a computed property: returns .imageToImage automatically when startingImage is set
         }
@@ -220,7 +323,7 @@ final class StableDiffusionBackend: ObservableObject {
         prompt: String,
         steps: Int,
         seed: UInt32,
-        inputImage: CGImage? = nil,
+        inputImage: UIImage? = nil,
         denoiseStrength: Float = 0.7
     ) async throws -> UIImage? {
         throw SDError.unavailable
