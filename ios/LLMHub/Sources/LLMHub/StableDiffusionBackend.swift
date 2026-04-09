@@ -64,6 +64,11 @@ final class StableDiffusionBackend: ObservableObject {
         return FileManager.default.fileExists(atPath: dir.appendingPathComponent("_downloaded").path)
     }
 
+    static func supportsImageToImage(modelId: String) -> Bool {
+        guard let dir = sdModelDirectory(for: modelId) else { return false }
+        return FileManager.default.fileExists(atPath: dir.appendingPathComponent("VAEEncoder.mlmodelc").path)
+    }
+
     func loadModel(_ model: AIModel) async throws {
         guard model.isCoreMLImageGeneration else { throw SDError.notCoreMLModel }
         guard let dir = StableDiffusionBackend.sdModelDirectory(for: model.id),
@@ -198,6 +203,11 @@ final class StableDiffusionBackend: ObservableObject {
     static func isCoreMLModelDownloaded(modelId: String) -> Bool {
         guard let dir = sdModelDirectory(for: modelId) else { return false }
         return FileManager.default.fileExists(atPath: dir.appendingPathComponent("_downloaded").path)
+    }
+
+    static func supportsImageToImage(modelId: String) -> Bool {
+        guard let dir = sdModelDirectory(for: modelId) else { return false }
+        return FileManager.default.fileExists(atPath: dir.appendingPathComponent("VAEEncoder.mlmodelc").path)
     }
 
     func loadModel(_ model: AIModel) async throws {

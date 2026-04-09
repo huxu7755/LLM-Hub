@@ -4150,6 +4150,11 @@ struct ImageGeneratorScreen: View {
         availableModels.first(where: { $0.id == selectedModelId }) ?? availableModels.first
     }
 
+    private var selectedModelSupportsImageToImage: Bool {
+        guard let selectedModel else { return false }
+        return StableDiffusionBackend.supportsImageToImage(modelId: selectedModel.id)
+    }
+
     var body: some View {
         Group {
             if availableModels.isEmpty {
@@ -4198,6 +4203,11 @@ struct ImageGeneratorScreen: View {
             )
         }
         .onChange(of: selectedImageItem) { _, item in
+            guard selectedModelSupportsImageToImage else {
+                selectedImageItem = nil
+                inputImage = nil
+                return
+            }
             guard let item else { inputImage = nil; return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self),
@@ -4211,6 +4221,16 @@ struct ImageGeneratorScreen: View {
         .onAppear {
             if selectedModelId.isEmpty || !availableModels.contains(where: { $0.id == selectedModelId }) {
                 selectedModelId = availableModels.first?.id ?? ""
+            }
+            if !selectedModelSupportsImageToImage {
+                selectedImageItem = nil
+                inputImage = nil
+            }
+        }
+        .onChange(of: selectedModelId) { _, _ in
+            if !selectedModelSupportsImageToImage {
+                selectedImageItem = nil
+                inputImage = nil
             }
         }
         .onDisappear {
@@ -4319,7 +4339,9 @@ struct ImageGeneratorScreen: View {
         ScrollView {
             VStack(spacing: 14) {
                 promptCard
-                img2imgCard
+                if selectedModelSupportsImageToImage {
+                    img2imgCard
+                }
                 if !generatedImages.isEmpty {
                     imageSwipeView
                 }
@@ -4337,7 +4359,9 @@ struct ImageGeneratorScreen: View {
             ScrollView {
                 VStack(spacing: 14) {
                     promptCard
-                    img2imgCard
+                    if selectedModelSupportsImageToImage {
+                        img2imgCard
+                    }
                     generateButton
                     if !generatedImages.isEmpty {
                         saveButton
@@ -4608,7 +4632,7 @@ struct ImageGeneratorScreen: View {
         let prompt = promptText
         let steps = Int(storedSteps)
         let denoiseStrength = Float(storedDenoiseStrength)
-        let inputCGImage = inputImage?.cgImage
+        let inputCGImage = selectedModelSupportsImageToImage ? inputImage?.cgImage : nil
 
         generateTask?.cancel()
         generateTask = Task {
