@@ -499,6 +499,12 @@ public actor ModelDownloader {
             try FileManager.default.moveItem(at: item, to: dest)
         }
 
+        // Strip pre-compiled ANE (E5) binaries from all .mlmodelc bundles.
+        // These binaries were compiled for a different chip (e.g. M-series Mac).
+        // Removing them forces CoreML to compile fresh ANE kernels for this device
+        // on first load, eliminating the "Must re-compile E5 bundle" ANE runtime error.
+        stripStaleArtifacts(in: destinationDir)
+
         // Clean up
         try? FileManager.default.removeItem(at: extractTempDir)
         try? FileManager.default.removeItem(at: tempZipURL)
@@ -513,6 +519,46 @@ public actor ModelDownloader {
         let fm = FileManager.default
         // ZIPFoundation FileManager extension: skips __MACOSX entries automatically.
         try fm.unzipItem(at: zipURL, to: destinationURL)
+    }
+
+    /// Recursively walks `directory`, finds every `.mlmodelc` bundle, and removes
+    /// the pre-compiled ANE / espresso artifacts inside them.
+    /// Those binaries are chip-specific (often compiled for M-series Mac ANE).
+    /// Stripping them forces CoreML to JIT-compile correct kernels for this device
+    /// on first load, eliminating "Must re-compile E5 bundle" errors.
+    private func stripStaleArtifacts(in directory: URL) {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        // ANE / espresso file name patterns compiled by coremltools
+        let stalePatterns = [
+            "model.espresso.net",
+            "model.espresso.shape",
+            "model.espresso.weights",
+            "coreml_model.espresso.net",
+            "coreml_model.espresso.shape",
+            "coreml_model.espresso.weights",
+        ]
+
+        for case let url as URL in enumerator {
+            guard url.pathExtension == "mlmodelc",
+                  (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            else { continue }
+
+            // Don't recurse into the mlmodelc itself through the enumerator
+            enumerator.skipDescendants()
+
+            for pattern in stalePatterns {
+                let target = url.appendingPathComponent(pattern)
+                if fm.fileExists(atPath: target.path) {
+                    try? fm.removeItem(at: target)
+                }
+            }
+        }
     }
 }
 

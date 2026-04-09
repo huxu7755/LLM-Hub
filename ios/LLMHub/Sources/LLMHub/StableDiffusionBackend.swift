@@ -78,9 +78,10 @@ final class StableDiffusionBackend: ObservableObject {
         loadedModelId = nil
 
         let modelDir = dir
+        let useANE = model.id.contains("split-einsum")
 
         do {
-            let wrapper = try await Self.loadPipeline(from: modelDir)
+            let wrapper = try await Self.loadPipeline(from: modelDir, useANE: useANE)
             pipeline = wrapper.value
             loadedModelId = model.id
             isLoaded = true
@@ -91,10 +92,14 @@ final class StableDiffusionBackend: ObservableObject {
         isLoading = false
     }
 
-    private static func loadPipeline(from modelDir: URL) async throws -> SendablePipeline {
+    private static func loadPipeline(from modelDir: URL, useANE: Bool) async throws -> SendablePipeline {
         return try await Task.detached(priority: .userInitiated) {
             let cfg = MLModelConfiguration()
-            cfg.computeUnits = .cpuAndGPU
+            // .all: OS picks best compute unit (CPU/GPU/ANE) and handles ANE
+            // recompilation automatically. .cpuAndNeuralEngine requires a valid
+            // pre-compiled E5 bundle and fails hard when it's stale.
+            // .cpuAndGPU: explicitly excludes ANE.
+            cfg.computeUnits = useANE ? .all : .cpuAndGPU
             let p = try StableDiffusionPipeline(
                 resourcesAt: modelDir,
                 controlNet: [],

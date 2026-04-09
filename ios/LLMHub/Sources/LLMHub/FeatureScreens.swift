@@ -4168,6 +4168,7 @@ struct ImageGeneratorScreen: View {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
                     generateTask?.cancel()
+                    sdBackend.unloadModel()
                     onNavigateBack()
                 } label: { Image(systemName: "arrow.left") }
             }
@@ -4214,6 +4215,7 @@ struct ImageGeneratorScreen: View {
         }
         .onDisappear {
             generateTask?.cancel()
+            sdBackend.unloadModel()
         }
         .overlay(alignment: .bottom) {
             if let msg = errorMessage {
@@ -4456,7 +4458,7 @@ struct ImageGeneratorScreen: View {
                     if page < generatedImages.count {
                         Image(uiImage: generatedImages[page])
                             .resizable()
-                            .scaledToFit()
+                            .aspectRatio(1, contentMode: .fit)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .padding(.horizontal, 4)
                             .tag(page)
@@ -4474,7 +4476,7 @@ struct ImageGeneratorScreen: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(minHeight: 300)
+            .aspectRatio(1, contentMode: .fit)
             .onChange(of: currentPage) { _, page in
                 if page == generatedImages.count && !isGenerating {
                     triggerVariation()
@@ -4526,7 +4528,8 @@ struct ImageGeneratorScreen: View {
                 }
             }
         }
-        .frame(minHeight: 300)
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 4)
     }
 
