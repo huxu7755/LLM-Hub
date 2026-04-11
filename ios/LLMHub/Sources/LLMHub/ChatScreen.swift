@@ -228,8 +228,7 @@ class ChatViewModel: ObservableObject {
     }
 
     var contextBudgetForRing: Double {
-        let generationBudget = Double(max(1, Int(maxTokens)))
-        return min(contextWindowCapForSession, generationBudget)
+        contextWindowCapForSession
     }
 
     var approximateContextTokensUsed: Double {
@@ -1361,6 +1360,7 @@ struct ChatScreen: View {
     @State private var attachedAudioURL: URL?
     @State private var previewImagePath: String?
     @State private var showAudioImporter = false
+    @State private var hasInitializedChatSession = false
     @FocusState private var isComposerFocused: Bool
 
     var body: some View {
@@ -1707,6 +1707,11 @@ struct ChatScreen: View {
             if !canAttachAudio {
                 attachedAudioURL = nil
             }
+        }
+        .onAppear {
+            guard !hasInitializedChatSession else { return }
+            hasInitializedChatSession = true
+            vm.unloadModel()
         }
         .onDisappear {
             vm.unloadModel()

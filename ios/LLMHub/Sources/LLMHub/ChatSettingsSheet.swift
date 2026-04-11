@@ -63,11 +63,10 @@ struct ChatSettingsSheet: View {
                                         .font(.subheadline)
                                         .foregroundColor(.white.opacity(0.72))
                                     Spacer()
-                                    if vm.selectedModelName == vm.loadedModelName {
-                                        Text("✅ " + settings.localized("ready_to_chat"))
-                                            .font(.caption.bold())
-                                            .foregroundColor(.green)
-                                    }
+                                    Text(vm.loadedModelName ?? settings.localized("not_loaded"))
+                                        .font(.caption.bold())
+                                        .foregroundColor(vm.loadedModelName != nil ? .green : .white.opacity(0.65))
+                                        .multilineTextAlignment(.trailing)
                                 }
                             }
                         }
