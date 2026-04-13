@@ -137,6 +137,7 @@ struct ChatSettingsSheet: View {
                         // Action Buttons
                         VStack(spacing: 12) {
                             Button(action: {
+                                applyDraftToViewModel()
                                 Task {
                                     await vm.loadModelIfNecessary(force: true)
                                     dismiss()
@@ -188,7 +189,10 @@ struct ChatSettingsSheet: View {
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(settings.localized("done")) { dismiss() }
+                    Button(settings.localized("done")) {
+                        applyDraftToViewModel()
+                        dismiss()
+                    }
                 }
             }
             .onAppear {

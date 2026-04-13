@@ -646,9 +646,15 @@ public:
                 return {};
             }
 
-            // 3. Run inference
-            const char* input_names[] = {"input_ids", "attention_mask", "token_type_ids"};
-            const OrtValue* inputs[] = {input_ids_guard.get(), attention_mask_guard.get(), token_type_ids_guard.get()};
+            // 3. Run inference — conditionally include token_type_ids (BERT has it, Gemma does not)
+            const char* input_names_3[] = {"input_ids", "attention_mask", "token_type_ids"};
+            const OrtValue* inputs_3[] = {input_ids_guard.get(), attention_mask_guard.get(), token_type_ids_guard.get()};
+            const char* input_names_2[] = {"input_ids", "attention_mask"};
+            const OrtValue* inputs_2[] = {input_ids_guard.get(), attention_mask_guard.get()};
+            const size_t run_input_count = has_token_type_ids_ ? 3 : 2;
+            const char* const* run_input_names = has_token_type_ids_ ? input_names_3 : input_names_2;
+            const OrtValue* const* run_inputs = has_token_type_ids_ ? inputs_3 : inputs_2;
+
             const char* output_names[] = {"last_hidden_state"};
             OrtValueGuard output_guard(ort_api_);
             OrtValue* output_ptr = nullptr;
@@ -656,9 +662,9 @@ public:
             status_guard.reset(ort_api_->Run(
                 session_,
                 nullptr,
-                input_names,
-                inputs,
-                3,
+                run_input_names,
+                run_inputs,
+                run_input_count,
                 output_names,
                 1,
                 &output_ptr
@@ -870,17 +876,24 @@ private:
                 return {};
             }
 
-            const char* input_names[] = {"input_ids", "attention_mask", "token_type_ids"};
-            const OrtValue* inputs[] = {
+            // Conditionally include token_type_ids (BERT has it, Gemma does not)
+            const char* input_names_3[] = {"input_ids", "attention_mask", "token_type_ids"};
+            const OrtValue* inputs_3[] = {
                 input_ids_guard.get(), attention_mask_guard.get(), token_type_ids_guard.get()
             };
+            const char* input_names_2[] = {"input_ids", "attention_mask"};
+            const OrtValue* inputs_2[] = {input_ids_guard.get(), attention_mask_guard.get()};
+            const size_t run_input_count = has_token_type_ids_ ? 3 : 2;
+            const char* const* run_input_names = has_token_type_ids_ ? input_names_3 : input_names_2;
+            const OrtValue* const* run_inputs = has_token_type_ids_ ? inputs_3 : inputs_2;
+
             const char* output_names[] = {"last_hidden_state"};
             OrtValueGuard output_guard(ort_api_);
             OrtValue* output_ptr = nullptr;
 
             status_guard.reset(ort_api_->Run(
                 session_, nullptr,
-                input_names, inputs, 3,
+                run_input_names, run_inputs, run_input_count,
                 output_names, 1,
                 &output_ptr));
             if (status_guard.is_error()) {
@@ -1004,6 +1017,43 @@ private:
         }
 
         LOGI("Model loaded successfully: %s", model_path.c_str());
+
+        // Detect whether the model has a token_type_ids input.
+        // BERT-style models have it; decoder-only models (Gemma, GPT) do not.
+        has_token_type_ids_ = false;
+        {
+            OrtAllocator* allocator = nullptr;
+            OrtStatus* alloc_st = ort_api_->GetAllocatorWithDefaultOptions(&allocator);
+            if (alloc_st == nullptr && allocator != nullptr) {
+                size_t num_inputs = 0;
+                OrtStatus* count_st = ort_api_->SessionGetInputCount(session_, &num_inputs);
+                if (count_st == nullptr) {
+                    for (size_t i = 0; i < num_inputs; ++i) {
+                        char* name_buf = nullptr;
+                        // SessionGetInputName is the stable API available since ORT 1.0
+                        OrtStatus* name_st = ort_api_->SessionGetInputName(
+                            session_, i, allocator, &name_buf);
+                        if (name_st == nullptr && name_buf != nullptr) {
+                            if (std::strcmp(name_buf, "token_type_ids") == 0) {
+                                has_token_type_ids_ = true;
+                            }
+                            allocator->Free(allocator, name_buf);
+                        } else if (name_st != nullptr) {
+                            ort_api_->ReleaseStatus(name_st);
+                        }
+                    }
+                    LOGI("Model inputs: %zu detected, has_token_type_ids=%s",
+                         num_inputs, has_token_type_ids_ ? "true" : "false");
+                } else {
+                    ort_api_->ReleaseStatus(count_st);
+                    has_token_type_ids_ = true; // safe fallback
+                }
+            } else {
+                if (alloc_st != nullptr) ort_api_->ReleaseStatus(alloc_st);
+                has_token_type_ids_ = true; // safe fallback
+            }
+        }
+
         return true;
     }
 
@@ -1041,6 +1091,7 @@ private:
     std::vector<int64_t> input_shape_ = {1, 0};  // Updated in constructor
 
     bool ready_ = false;
+    bool has_token_type_ids_ = true;  // detected at model load time; false for Gemma/decoder models
     size_t embedding_dim_ = 384;  // all-MiniLM-L6-v2 dimension
     size_t max_seq_length_ = 512;  // all-MiniLM-L6-v2 max_position_embeddings=512
     std::mutex embed_mutex_;  // Protects pre-allocated buffers during concurrent embed() calls
