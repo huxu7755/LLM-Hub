@@ -24,8 +24,9 @@ let package = Package(
         .target(
             name: "LLMHub",
             dependencies: [
-                .product(name: "RunAnywhere", package: "runanywhere-sdks"),
-                .product(name: "RunAnywhereLlamaCPP", package: "runanywhere-sdks"),
+                .product(name: "RunAnywhere", package: "runanywhere-sdks-latest"),
+                .product(name: "RunAnywhereLlamaCPP", package: "runanywhere-sdks-latest"),
+                .product(name: "RunAnywhereONNX", package: "runanywhere-sdks-latest"),
                 .product(name: "StableDiffusion", package: "ml-stable-diffusion"),
                 .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],

@@ -1,4 +1,5 @@
 import CRACommons
+import Darwin
 import Foundation
 
 // MARK: - EmbeddingService
@@ -22,6 +23,10 @@ actor EmbeddingService {
 
     /// Initialize the embedding service and load a GGUF embedding model.
     func initialize(modelPath: String, modelName: String) throws {
+        // Register ONNX embeddings provider explicitly. ONNX.register() wires
+        // STT/TTS/VAD, but embeddings are exposed through a separate symbol.
+        try EmbeddingService.registerOnnxEmbeddingsProvider()
+
         // Tear down any existing instance.
         if handle != nil {
             rac_embeddings_cleanup(handle)
@@ -63,6 +68,20 @@ actor EmbeddingService {
     private func embedTest() throws -> [Float] {
         guard let h = handle else { return [] }
         return EmbeddingService.callEmbed(handle: h, text: "test")
+    }
+
+    private nonisolated static func registerOnnxEmbeddingsProvider() throws {
+        typealias RegisterFn = @convention(c) () -> Int32
+
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "rac_backend_onnx_embeddings_register") else {
+            throw EmbeddingError.initFailed("rac_backend_onnx_embeddings_register symbol not found")
+        }
+
+        let registerFn = unsafeBitCast(symbol, to: RegisterFn.self)
+        let result = registerFn()
+        if result != RAC_SUCCESS && result != RAC_ERROR_MODULE_ALREADY_REGISTERED {
+            throw EmbeddingError.initFailed("rac_backend_onnx_embeddings_register failed: \(result)")
+        }
     }
 
     // nonisolated: no actor-isolated storage touched → no "sending" across boundaries

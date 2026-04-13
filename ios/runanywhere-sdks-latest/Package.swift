@@ -37,7 +37,7 @@ import Foundation
 //   ./scripts/build-swift.sh --set-remote  (sets useLocalBinaries = false)
 //
 // =============================================================================
-let useLocalBinaries = true //  Toggle: true for local dev, false for release
+let useLocalBinaries = false //  Toggle: true for local dev, false for release
 
 // Version for remote XCFrameworks (used when testLocal = false)
 // Updated automatically by CI/CD during releases
@@ -64,6 +64,14 @@ let package = Package(
         .library(
             name: "RunAnywhereLlamaCPP",
             targets: ["LlamaCPPRuntime"]
+        ),
+
+        // =================================================================
+        // ONNX Runtime Backend - adds STT/TTS/VAD/Embeddings capabilities
+        // =================================================================
+        .library(
+            name: "RunAnywhereONNX",
+            targets: ["ONNXRuntime"]
         ),
 
         // =================================================================
@@ -105,6 +113,20 @@ let package = Package(
             name: "LlamaCPPBackend",
             dependencies: ["RABackendLlamaCPPBinary"],
             path: "sdk/runanywhere-swift/Sources/LlamaCPPRuntime/include",
+            publicHeadersPath: "."
+        ),
+
+        // =================================================================
+        // C Bridge Module - ONNX Backend Headers
+        // =================================================================
+        .target(
+            name: "ONNXBackend",
+            dependencies: [
+                "RABackendONNXBinary",
+                .target(name: "ONNXRuntimeiOSBinary", condition: .when(platforms: [.iOS])),
+                .target(name: "ONNXRuntimemacOSBinary", condition: .when(platforms: [.macOS])),
+            ],
+            path: "sdk/runanywhere-swift/Sources/ONNXRuntime/include",
             publicHeadersPath: "."
         ),
 
@@ -152,6 +174,29 @@ let package = Package(
                 .linkedFramework("Accelerate"),
                 .linkedFramework("Metal"),
                 .linkedFramework("MetalKit"),
+            ]
+        ),
+
+        // =================================================================
+        // ONNX Runtime Backend
+        // =================================================================
+        .target(
+            name: "ONNXRuntime",
+            dependencies: [
+                "RunAnywhere",
+                "ONNXBackend",
+                "RABackendONNXBinary",
+                .target(name: "ONNXRuntimeiOSBinary", condition: .when(platforms: [.iOS])),
+                .target(name: "ONNXRuntimemacOSBinary", condition: .when(platforms: [.macOS])),
+            ],
+            path: "sdk/runanywhere-swift/Sources/ONNXRuntime",
+            exclude: ["include"],
+            linkerSettings: [
+                .linkedLibrary("c++"),
+                .linkedFramework("Accelerate"),
+                .linkedFramework("CoreML"),
+                .linkedLibrary("archive"),
+                .linkedLibrary("bz2"),
             ]
         ),
 
@@ -206,7 +251,22 @@ func binaryTargets() -> [Target] {
                 name: "RABackendLlamaCPPBinary",
                 path: "sdk/runanywhere-swift/Binaries/RABackendLLAMACPP.xcframework"
             ),
+            .binaryTarget(
+                name: "RABackendONNXBinary",
+                path: "sdk/runanywhere-swift/Binaries/RABackendONNX.xcframework"
+            ),
         ]
+
+        targets.append(contentsOf: [
+            .binaryTarget(
+                name: "ONNXRuntimeiOSBinary",
+                path: "sdk/runanywhere-swift/Binaries/onnxruntime-ios.xcframework"
+            ),
+            .binaryTarget(
+                name: "ONNXRuntimemacOSBinary",
+                path: "sdk/runanywhere-swift/Binaries/onnxruntime-macos.xcframework"
+            ),
+        ])
 
         return targets
     } else {
@@ -225,6 +285,21 @@ func binaryTargets() -> [Target] {
                 name: "RABackendLlamaCPPBinary",
                 url: "https://github.com/timmyy123/LLM-Hub/releases/download/ios-sdk-v\(sdkVersion)-patched-v2/RABackendLLAMACPP-v\(sdkVersion).zip",
                 checksum: "55603978324a2c451c85aae670779f9bdc61c8b274d5e43f97387be44012590d"
+            ),
+            .binaryTarget(
+                name: "RABackendONNXBinary",
+                url: "https://github.com/timmyy123/LLM-Hub/releases/download/ios-sdk-v\(sdkVersion)-patched-v2/RABackendONNX-v\(sdkVersion)-r1.zip",
+                checksum: "f69dae76a7b79bdbb628eb1fa1de9ee1170e810713f68f40123add6857138c05"
+            ),
+            .binaryTarget(
+                name: "ONNXRuntimeiOSBinary",
+                url: "https://github.com/timmyy123/LLM-Hub/releases/download/ios-sdk-v\(sdkVersion)-patched-v2/onnxruntime-ios-v\(sdkVersion).zip",
+                checksum: "1eef0d0521c0aafadd05085d88a523606e205bb4e6845c77dd777136cddfc2be"
+            ),
+            .binaryTarget(
+                name: "ONNXRuntimemacOSBinary",
+                url: "https://github.com/timmyy123/LLM-Hub/releases/download/ios-sdk-v\(sdkVersion)-patched-v2/onnxruntime-macos-v\(sdkVersion).zip",
+                checksum: "ec552aedae1e7a159258c803364e70bb4f01d37a769c815f6752e8cda0420720"
             ),
         ]
 

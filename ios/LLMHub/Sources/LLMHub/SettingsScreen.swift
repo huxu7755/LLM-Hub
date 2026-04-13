@@ -45,20 +45,19 @@ struct SettingsScreen: View {
                         .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
                         .listRowBackground(Color.clear)
 
-                    // RAG toggle
+                    // Memory toggle (requires embedding model)
                     SettingsToggleRow(
-                        icon: "doc.text.magnifyingglass",
+                        icon: "brain",
                         iconColor: ApolloPalette.accentStrong,
-                        title: settings.localized("rag_enabled"),
+                        title: settings.localized("memory"),
                         subtitle: settings.selectedEmbeddingModelId != nil
-                            ? settings.localized("ai_can_reference_documents")
-                            : settings.localized("no_embedding_model_selected"),
+                            ? settings.localized("memory_description_enabled")
+                            : settings.localized("memory_requires_rag"),
                         isOn: Binding(
-                            get: { settings.ragEnabled && settings.selectedEmbeddingModelId != nil },
+                            get: { settings.memoryEnabled && settings.selectedEmbeddingModelId != nil },
                             set: { newValue in
                                 guard settings.selectedEmbeddingModelId != nil else { return }
-                                settings.ragEnabled = newValue
-                                if !newValue { settings.memoryEnabled = false }
+                                settings.memoryEnabled = newValue
                             }
                         )
                     )
@@ -66,35 +65,21 @@ struct SettingsScreen: View {
                     .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
                     .listRowBackground(Color.clear)
 
-                    // Memory toggle (requires RAG)
-                    SettingsToggleRow(
-                        icon: "brain",
-                        iconColor: ApolloPalette.accentStrong,
-                        title: settings.localized("memory"),
-                        subtitle: settings.ragEnabled && settings.selectedEmbeddingModelId != nil
-                            ? settings.localized("memory_description_enabled")
-                            : settings.localized("memory_requires_rag"),
-                        isOn: Binding(
-                            get: { settings.memoryEnabled && settings.ragEnabled && settings.selectedEmbeddingModelId != nil },
-                            set: { newValue in
-                                guard settings.ragEnabled && settings.selectedEmbeddingModelId != nil else { return }
-                                settings.memoryEnabled = newValue
-                            }
-                        )
-                    )
-                    .disabled(!(settings.ragEnabled && settings.selectedEmbeddingModelId != nil))
-                    .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
-                    .listRowBackground(Color.clear)
-
                     // Memory manager row (only when memory enabled)
-                    if settings.memoryEnabled && settings.ragEnabled {
+                    if settings.memoryEnabled && settings.selectedEmbeddingModelId != nil {
                         SettingsRow(
                             icon: "tray.full",
                             iconColor: ApolloPalette.accentStrong,
                             titleKey: "manage_memory",
                             subtitleKey: "manage_memory_subtitle"
                         ) {
-                            showMemoryDialog = true
+                            Task {
+                                _ = await RunAnywhere.discoverDownloadedModels()
+                                await RagServiceManager.shared.initialize(modelId: settings.selectedEmbeddingModelId)
+                                await MainActor.run {
+                                    showMemoryDialog = true
+                                }
+                            }
                         }
                         .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
                         .listRowBackground(Color.clear)
@@ -199,8 +184,12 @@ struct SettingsScreen: View {
                 .environmentObject(settings)
         }
         .onChange(of: settings.selectedEmbeddingModelId) { _, newId in
+            // Initialization and re-embedding handled by EmbeddingModelSelectorRow.
+            // This handles external changes (e.g. model deleted from download screen).
             Task {
-                await RagServiceManager.shared.initialize(modelId: newId)
+                if newId == nil {
+                    await RagServiceManager.shared.initialize(modelId: nil)
+                }
             }
         }
     }
@@ -261,17 +250,21 @@ private struct EmbeddingModelSelectorRow: View {
         .confirmationDialog(settings.localized("select_embedding_model"), isPresented: $showPicker, titleVisibility: .visible) {
             ForEach(downloadedEmbeddingModels) { model in
                 Button(model.name) {
+                    let previousModelId = settings.selectedEmbeddingModelId
                     settings.selectedEmbeddingModelId = model.id
-                    settings.ragEnabled = true
                     Task {
-                        await RagServiceManager.shared.initialize(modelId: model.id)
+                        if previousModelId != nil && previousModelId != model.id {
+                            print("[Memory] Embedding model changed from \(previousModelId ?? "nil") to \(model.id) — re-embedding global memory")
+                            await RagServiceManager.shared.reembedGlobalMemory(newModelId: model.id)
+                        } else {
+                            await RagServiceManager.shared.initialize(modelId: model.id)
+                        }
                     }
                 }
             }
             if settings.selectedEmbeddingModelId != nil {
                 Button(settings.localized("disable_embeddings"), role: .destructive) {
                     settings.selectedEmbeddingModelId = nil
-                    settings.ragEnabled = false
                     settings.memoryEnabled = false
                 }
             }
@@ -351,10 +344,12 @@ struct MemoryManagerSheet: View {
                                     )
                                     await MainActor.run {
                                         isSaving = false
-                                        statusMessage = ok
-                                            ? settings.localized("memory_save_success")
-                                            : settings.localized("memory_save_failed")
-                                        if ok { pasteText = "" }
+                                        if ok {
+                                            statusMessage = settings.localized("memory_save_success")
+                                            pasteText = ""
+                                        } else {
+                                            statusMessage = settings.localized("memory_save_failed")
+                                        }
                                     }
                                 }
                             } label: {
@@ -482,8 +477,10 @@ struct MemoryManagerSheet: View {
             .sheet(isPresented: $showChatImport) {
                 ChatImportSheet(
                     onDismiss: { showChatImport = false },
-                    onImport: { imported in
-                        statusMessage = settings.localized("chat_imported_to_memory")
+                    onImport: { _, success in
+                        statusMessage = success
+                            ? settings.localized("chat_imported_to_memory")
+                            : (RagServiceManager.shared.embeddingNotReadyReason ?? settings.localized("memory_upload_failed"))
                     }
                 )
                 .environmentObject(settings)
@@ -621,7 +618,7 @@ private struct EditMemorySheet: View {
 private struct ChatImportSheet: View {
     @EnvironmentObject var settings: AppSettings
     let onDismiss: () -> Void
-    let onImport: ([ChatSession]) -> Void
+    let onImport: ([ChatSession], Bool) -> Void
 
     @StateObject private var chatStore = ChatStore.shared
     @State private var selectedIds: Set<UUID> = []
@@ -678,6 +675,7 @@ private struct ChatImportSheet: View {
                             guard !toImport.isEmpty else { return }
                             isImporting = true
                             Task {
+                                var allSucceeded = true
                                 for session in toImport {
                                     let chatText = session.messages.map { msg in
                                         let role = msg.isFromUser ? "User" : "Assistant"
@@ -685,15 +683,16 @@ private struct ChatImportSheet: View {
                                     }.joined(separator: "\n\n")
                                     guard !chatText.isEmpty else { continue }
                                     let title = session.title.isEmpty ? settings.localized("drawer_new_chat") : session.title
-                                    await RagServiceManager.shared.addGlobalMemory(
+                                    let ok = await RagServiceManager.shared.addGlobalMemory(
                                         text: chatText,
                                         fileName: "Chat: \(title)",
                                         metadata: "chat_import"
                                     )
+                                    if !ok { allSucceeded = false }
                                 }
                                 await MainActor.run {
                                     isImporting = false
-                                    onImport(toImport)
+                                    onImport(toImport, allSucceeded)
                                     onDismiss()
                                 }
                             }

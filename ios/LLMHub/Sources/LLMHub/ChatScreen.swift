@@ -234,7 +234,7 @@ class ChatViewModel: ObservableObject {
     @Published var pendingAttachedDocumentChars: Int = 0
 
     var isRagEnabled: Bool {
-        AppSettings.shared.ragEnabled && AppSettings.shared.selectedEmbeddingModelId != nil
+        AppSettings.shared.selectedEmbeddingModelId != nil
     }
     var isMemoryEnabled: Bool {
         AppSettings.shared.memoryEnabled && isRagEnabled
@@ -673,12 +673,15 @@ class ChatViewModel: ObservableObject {
             if !capturedPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             if ragEnabled {
                 var contextParts: [String] = []
+                print("[Chat] Send — RAG enabled, memoryEnabled=\(memoryEnabled)")
 
                 // 2a. Global memory search.
                 if memoryEnabled {
+                    print("[Chat] Send — searching global memory for: \"\(capturedPrompt.prefix(50))\"")
                     let memChunks = await RagServiceManager.shared.searchGlobalContext(
                         query: capturedPrompt, maxResults: 3, relaxed: false
                     )
+                    print("[Chat] Send — got \(memChunks.count) memory chunks")
                     for chunk in memChunks {
                         contextParts.append("📝 **\(chunk.fileName)**:\n\(chunk.content.trimmingCharacters(in: .whitespacesAndNewlines))")
                     }
@@ -695,9 +698,12 @@ class ChatViewModel: ObservableObject {
                 }
 
                 if !contextParts.isEmpty {
+                    print("[Chat] Send — injecting \(contextParts.count) RAG context parts into system prompt")
                     ragContextPrefix = "---\n\nUSER MEMORY FACTS AND DOCUMENT CONTEXT:\n\nIMPORTANT: The following lines contain relevant information from user documents and memory. Use them to answer accurately.\n\n"
                         + contextParts.joined(separator: "\n\n")
                         + "\n\n---\n\n"
+                } else {
+                    print("[Chat] Send — no RAG context found")
                 }
             } else if let docText = inlineDocumentText, !docText.isEmpty {
                 // RAG disabled but document attached: stuff full text directly into context.
@@ -2003,6 +2009,10 @@ struct ChatScreen: View {
             guard !hasInitializedChatSession else { return }
             hasInitializedChatSession = true
             vm.unloadModel()
+            Task {
+                _ = await RunAnywhere.discoverDownloadedModels()
+                await RagServiceManager.shared.initialize(modelId: AppSettings.shared.selectedEmbeddingModelId)
+            }
         }
         .onDisappear {
             vm.unloadModel()

@@ -38,7 +38,8 @@ XCODE_VERSION=15.4
 #   1. What sherpa-onnx was built against
 #   2. What's in runanywhere-swift/Binaries/onnxruntime.xcframework
 # sherpa-onnx 1.12.17+ requires ONNX Runtime >= 1.17.1
-ONNX_VERSION_IOS=1.17.1
+# Updated to 1.20.0 to support ONNX IR version 10 (needed for embeddinggemma models)
+ONNX_VERSION_IOS=1.20.0
 
 # Android version - used by Sherpa-ONNX, must be compatible
 ONNX_VERSION_ANDROID=1.17.1

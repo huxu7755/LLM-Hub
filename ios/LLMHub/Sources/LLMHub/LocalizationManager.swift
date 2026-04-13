@@ -113,9 +113,8 @@ final class AppSettings: ObservableObject {
     @Published var selectedEmbeddingModelId: String? {
         didSet { UserDefaults.standard.set(selectedEmbeddingModelId, forKey: "selected_embedding_model_id") }
     }
-    @Published var ragEnabled: Bool {
-        didSet { UserDefaults.standard.set(ragEnabled, forKey: "rag_enabled") }
-    }
+    /// RAG is enabled when an embedding model is selected (no separate toggle, mirrors Android).
+    var ragEnabled: Bool { selectedEmbeddingModelId != nil }
     @Published var memoryEnabled: Bool {
         didSet { UserDefaults.standard.set(memoryEnabled, forKey: "memory_enabled") }
     }
@@ -129,7 +128,6 @@ final class AppSettings: ObservableObject {
         showResultStatus = UserDefaults.standard.object(forKey: "show_result_status") as? Bool ?? true
         autoReadoutEnabled = UserDefaults.standard.bool(forKey: "auto_readout_enabled")
         selectedEmbeddingModelId = UserDefaults.standard.string(forKey: "selected_embedding_model_id")
-        ragEnabled = UserDefaults.standard.bool(forKey: "rag_enabled")
         memoryEnabled = UserDefaults.standard.bool(forKey: "memory_enabled")
     }
 
