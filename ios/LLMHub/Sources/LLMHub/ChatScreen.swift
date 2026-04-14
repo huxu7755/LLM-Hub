@@ -1567,7 +1567,6 @@ struct ChatScreen: View {
     @State private var attachedDocumentURL: URL?
     @State private var attachedDocumentName: String?
     @State private var previewImagePath: String?
-    @State private var showAudioImporter = false
     @State private var showDocumentImporter = false
     @State private var showAudioTranscribeImporter = false
     @State private var showAttachMenu = false
@@ -1913,29 +1912,7 @@ struct ChatScreen: View {
                 onNavigateToSettings: onNavigateToSettings
             )
         }
-        .fileImporter(
-            isPresented: $showAudioImporter,
-            allowedContentTypes: [.audio, .mpeg4Audio],
-            allowsMultipleSelection: false
-        ) { result in
-            guard case .success(let urls) = result, let sourceURL = urls.first else { return }
-            attachedAudioURL = copyAttachmentToTemp(sourceURL, preferredExtension: sourceURL.pathExtension.isEmpty ? "m4a" : sourceURL.pathExtension)
-        }
-        .fileImporter(
-            isPresented: $showDocumentImporter,
-            allowedContentTypes: DocumentTextExtractor.supportedTypes,
-            allowsMultipleSelection: false
-        ) { result in
-            guard case .success(let urls) = result, let sourceURL = urls.first else { return }
-            attachedDocumentURL = sourceURL
-            attachedDocumentName = sourceURL.lastPathComponent
-            // Eagerly estimate doc size for context ring (when RAG is off)
-            Task {
-                if let text = try? DocumentTextExtractor.extract(from: sourceURL) {
-                    await MainActor.run { vm.pendingAttachedDocumentChars = min(text.count, 8000) }
-                }
-            }
-        }
+        // Audio transcribe importer stays here as the primary chain modifier.
         .fileImporter(
             isPresented: $showAudioTranscribeImporter,
             allowedContentTypes: [.audio, .mpeg4Audio, .mp3],
@@ -1949,6 +1926,25 @@ struct ChatScreen: View {
                 }
             }
         }
+        // Document importer is on a separate hierarchy level to avoid the SwiftUI
+        // limitation where only the last .fileImporter in a modifier chain presents.
+        .background(
+            EmptyView()
+                .fileImporter(
+                    isPresented: $showDocumentImporter,
+                    allowedContentTypes: DocumentTextExtractor.supportedTypes,
+                    allowsMultipleSelection: false
+                ) { result in
+                    guard case .success(let urls) = result, let sourceURL = urls.first else { return }
+                    attachedDocumentURL = sourceURL
+                    attachedDocumentName = sourceURL.lastPathComponent
+                    Task {
+                        if let text = try? DocumentTextExtractor.extract(from: sourceURL) {
+                            await MainActor.run { vm.pendingAttachedDocumentChars = min(text.count, 8000) }
+                        }
+                    }
+                }
+        )
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedImageItem, matching: .images)
         .onChange(of: selectedImageItem) { _, item in
             guard let item else {

@@ -2864,7 +2864,7 @@ struct TranslatorScreen: View {
         isLoading = true
         defer { isLoading = false }
 
-        let modelContextCap = model.contextWindowSize > 0 ? model.contextWindowSize : 2048
+        let modelContextCap = model.contextWindowSize > 0 ? model.contextWindowSize : 4096
         let effectiveContext = min(max(1, Int(maxTokens)), modelContextCap)
         let shouldReload = force
             || llm.currentlyLoadedModel != model.name
