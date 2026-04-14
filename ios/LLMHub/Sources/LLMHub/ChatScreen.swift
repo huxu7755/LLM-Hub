@@ -401,7 +401,7 @@ private func chatAppleFoundationModelIfAvailable() -> AIModel? {
 
 @MainActor
 private func chatModel(named modelName: String) -> AIModel? {
-    if let model = ModelData.models.first(where: { $0.name == modelName }) {
+    if let model = ModelData.allModels().first(where: { $0.name == modelName }) {
         return model
     }
     if let appleModel = chatAppleFoundationModelIfAvailable(), appleModel.name == modelName {
@@ -1148,15 +1148,15 @@ class ChatViewModel: ObservableObject {
             if !capturedPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             if ragEnabled {
                 var contextParts: [String] = []
-                print("[Chat] Send — RAG enabled, memoryEnabled=\(memoryEnabled)")
+                print("🔍 [Chat] Send — RAG enabled, memoryEnabled=\(memoryEnabled)")
 
                 // 2a. Global memory search.
                 if memoryEnabled {
-                    print("[Chat] Send — searching global memory for: \"\(capturedPrompt.prefix(50))\"")
+                    print("🔍 [Chat] Send — searching global memory for: \"\(capturedPrompt.prefix(50))\"")
                     let memChunks = await RagServiceManager.shared.searchGlobalContext(
                         query: capturedPrompt, maxResults: 3, relaxed: false
                     )
-                    print("[Chat] Send — got \(memChunks.count) memory chunks")
+                    print("🔍 [Chat] Send — got \(memChunks.count) memory chunks")
                     for chunk in memChunks {
                         contextParts.append("📝 **\(chunk.fileName)**:\n\(chunk.content.trimmingCharacters(in: .whitespacesAndNewlines))")
                     }
@@ -1173,12 +1173,12 @@ class ChatViewModel: ObservableObject {
                 }
 
                 if !contextParts.isEmpty {
-                    print("[Chat] Send — injecting \(contextParts.count) RAG context parts into system prompt")
+                    print("🔍 [Chat] Send — injecting \(contextParts.count) RAG context parts into system prompt")
                     ragContextPrefix = "---\n\nUSER MEMORY FACTS AND DOCUMENT CONTEXT:\n\nIMPORTANT: The following lines contain relevant information from user documents and memory. Use them to answer accurately.\n\n"
                         + contextParts.joined(separator: "\n\n")
                         + "\n\n---\n\n"
                 } else {
-                    print("[Chat] Send — no RAG context found")
+                    print("🔍 [Chat] Send — no RAG context found")
                 }
             } else if let docText = inlineDocumentText, !docText.isEmpty {
                 // RAG disabled but document attached: stuff full text directly into context.
@@ -2505,7 +2505,7 @@ struct ChatScreen: View {
             }
         }
         .onChange(of: vm.selectedModelName) { _, _ in
-            let selectedModel = ModelData.models.first(where: { $0.name == vm.selectedModelName })
+            let selectedModel = ModelData.allModels().first(where: { $0.name == vm.selectedModelName })
             let canAttachVision = (selectedModel?.supportsVision == true) && vm.enableVision
             let canAttachAudio = (selectedModel?.supportsAudio == true) && vm.enableAudio
 
@@ -2653,9 +2653,14 @@ struct ChatScreen: View {
             return documentsDir.appendingPathComponent("models")
         }()
 
-        var models = ModelData.models.filter { model in
+        var models = ModelData.allModels().filter { model in
             if model.isDependencyOnly { return false }
             if model.name.hasPrefix("Translate Gemma") { return false }
+            if model.category == .embedding || model.category == .imageGeneration { return false }
+
+            if model.source == "Custom" {
+                return FileManager.default.fileExists(atPath: model.url)
+            }
 
             if RunAnywhere.isModelDownloaded(model.id, framework: model.inferenceFramework) {
                 return true

@@ -159,6 +159,51 @@ public struct AIModel: Identifiable, Codable, Sendable {
 }
 
 public struct ModelData {
+
+    // Returns catalog models merged with any user-imported custom models from UserDefaults.
+    public static func allModels() -> [AIModel] {
+        var all = models
+        if let data = UserDefaults.standard.data(forKey: "imported_models_ios"),
+           let imported = try? JSONDecoder().decode([AIModel].self, from: data) {
+            for model in imported where !all.contains(where: { $0.id == model.id }) {
+                all.append(fixUpCustomModelPaths(model))
+            }
+        }
+        return all
+    }
+
+    /// iOS may relocate the app container between launches, changing the UUID in
+    /// absolute paths. Re-root stored paths to the current Documents directory so
+    /// imported models survive across restarts.
+    private static func fixUpCustomModelPaths(_ model: AIModel) -> AIModel {
+        guard model.source == "Custom" else { return model }
+        let fixedURL = rerootedPath(model.url)
+        let fixedAdditional = model.additionalFiles.map { rerootedPath($0) }
+        guard fixedURL != model.url || fixedAdditional != model.additionalFiles else { return model }
+        return AIModel(
+            id: model.id, name: model.name, description: model.description,
+            url: fixedURL, category: model.category, sizeBytes: model.sizeBytes,
+            source: model.source, supportsVision: model.supportsVision,
+            supportsAudio: model.supportsAudio, supportsThinking: model.supportsThinking,
+            supportsGpu: model.supportsGpu, requirements: model.requirements,
+            contextWindowSize: model.contextWindowSize, modelFormat: model.modelFormat,
+            additionalFiles: fixedAdditional
+        )
+    }
+
+    private static func rerootedPath(_ storedPath: String) -> String {
+        guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return storedPath }
+        if let marker = storedPath.range(of: "/Documents/ImportedModels/") {
+            let relativeSuffix = String(storedPath[marker.upperBound...])
+            return docsDir.appendingPathComponent("ImportedModels").appendingPathComponent(relativeSuffix).path
+        }
+        if let marker = storedPath.range(of: "/Documents/RunAnywhere/") {
+            let relativeSuffix = String(storedPath[marker.upperBound...])
+            return docsDir.appendingPathComponent("RunAnywhere").appendingPathComponent(relativeSuffix).path
+        }
+        return storedPath
+    }
+
 // AUTO-GENERATED from android ModelData.kt: GGUF + ONNX models only
 public static let models: [AIModel] = [
     AIModel(
