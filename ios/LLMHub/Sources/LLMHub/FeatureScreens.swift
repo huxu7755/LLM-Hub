@@ -1910,21 +1910,77 @@ private struct IOS17VibeVoiceScreen: View {
             If the input is unclear, ask one brief clarification question.
             """
 
-        // Build multi-turn prompt from conversation history.
-        // LlamaCPP's chat template applies system+user roles, but we need
-        // all prior turns in the prompt for the KV cache prefix to match.
+        // 1. Record the newest turn
         conversationHistory.append((role: "user", content: text))
 
-        // Trim history if it gets too long (keep last ~8 turns to fit context window)
-        let maxTurns = 8
-        if conversationHistory.count > maxTurns {
-            conversationHistory = Array(conversationHistory.suffix(maxTurns))
+        // 2. Context Management (Sliding Window)
+        // Keep approx 10k chars of history for voice chat (~2.5k tokens).
+        let maxHistoryChars = 10000
+        var currentChars = 0
+        var truncatedHistory: [(role: String, content: String)] = []
+        for msg in conversationHistory.reversed() {
+            let msgLen = msg.content.count
+            if currentChars + msgLen < maxHistoryChars {
+                truncatedHistory.insert(msg, at: 0)
+                currentChars += msgLen
+            } else {
+                break
+            }
         }
 
-        let multiTurnPrompt = conversationHistory
-            .map { "\($0.role == "user" ? "User" : "Assistant"): \($0.content)" }
-            .joined(separator: "\n")
-            + "\nAssistant:"
+        // 3. Family Detection
+        let modelName = selectedModelName.lowercased()
+        let isGemma  = modelName.contains("gemma")
+        let isGemma4 = isGemma && (modelName.contains("gemma 4") || modelName.contains("gemma-4"))
+        let isLlama  = modelName.contains("llama") || modelName.contains("mistral")
+
+        // 4. Build Raw Prompt (Prepend __RAW_PROMPT__ to bypass SDK auto-formatting)
+        var parts: [String] = ["__RAW_PROMPT__"]
+        
+        // When using RAW_PROMPT, the SDK's systemPrompt argument is ignored, 
+        // so we must inject it manually into our sequence.
+        if isGemma4 {
+            parts.append("<|turn>system\n\(systemPrompt)<turn|>")
+        } else if isGemma {
+            parts.append("<start_of_turn>system\n\(systemPrompt)<end_of_turn>")
+        } else if isLlama {
+            parts.append("<<SYS>>\n\(systemPrompt)\n<</SYS>>")
+        } else {
+            parts.append("System: \(systemPrompt)")
+        }
+
+        for msg in truncatedHistory {
+            let content = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !content.isEmpty else { continue }
+
+            if isGemma4 {
+                let role = (msg.role == "user") ? "user" : "model"
+                parts.append("<|turn>\(role)\n\(content)<turn|>")
+            } else if isGemma {
+                let role = (msg.role == "user") ? "user" : "model"
+                parts.append("<start_of_turn>\(role)\n\(content)<end_of_turn>")
+            } else if isLlama {
+                if msg.role == "user" {
+                    parts.append("[INST] \(content) [/INST]")
+                } else {
+                    parts.append(content)
+                }
+            } else {
+                let prefix = (msg.role == "user") ? "User" : "Assistant"
+                parts.append("\(prefix): \(content)")
+            }
+        }
+
+        // Final Open Turn (Assistant)
+        if isGemma4 {
+            parts.append("<|turn>model\n")
+        } else if isGemma {
+            parts.append("<start_of_turn>model\n")
+        } else {
+            parts.append("Assistant:")
+        }
+
+        let multiTurnPrompt = parts.joined(separator: "\n")
 
         generationTask = Task {
             do {
@@ -4541,7 +4597,8 @@ struct VibeCoderScreen: View {
         guard !trimmedPrompt.isEmpty else { return }
         guard !isGenerating else { return }
 
-        if isContextBudgetExceededForSession {
+        let needsContextReset = isContextBudgetExceededForSession
+        if needsContextReset {
             createNewChatSession()
             appendMessage(
                 to: activeChatSessionId,
@@ -4570,7 +4627,15 @@ struct VibeCoderScreen: View {
 
             isGenerating = true
             do {
-                let prompt = buildFileAwareEditPrompt(trimmedPrompt)
+                // Build the file-aware base prompt for the current request.
+                let filePrompt = buildFileAwareEditPrompt(trimmedPrompt)
+
+                // Wrap with full conversation history so the model remembers prior turns.
+                let prompt = buildVibeCoderMultiTurnPrompt(
+                    currentFilePrompt: filePrompt,
+                    sessionId: sessionId
+                )
+
                 try await llm.generate(prompt: prompt) { text, _, _ in
                     Task { @MainActor in
                         updateMessageText(sessionId: sessionId, messageId: assistantId, text: text)
@@ -4619,12 +4684,87 @@ struct VibeCoderScreen: View {
         return msg.text
     }
 
+    /// Builds a multi-turn prompt from VibeCode chat history so the model remembers
+    /// prior coding requests. Uses RAW_PROMPT to bypass SDK re-formatting.
+    private func buildVibeCoderMultiTurnPrompt(currentFilePrompt: String, sessionId: UUID) -> String {
+        let modelName = selectedModelName.lowercased()
+        let isGemma  = modelName.contains("gemma")
+        let isGemma4 = isGemma && (modelName.contains("gemma 4") || modelName.contains("gemma-4"))
+        let isLlama  = modelName.contains("llama") || modelName.contains("mistral")
+
+        // 1. Get history (exclude placeholder turns)
+        var allMessages: [VibeChatMessage] = []
+        if let idx = chatSessions.firstIndex(where: { $0.id == sessionId }) {
+            allMessages = chatSessions[idx].messages
+        }
+        
+        // Drop the last 2 (new user + empty assistant placeholder).
+        let history = allMessages.count >= 2 ? Array(allMessages.dropLast(2)) : []
+        
+        // 2. Context Management (Sliding Window)
+        // Code-heavy prompts are larger, so we keep up to 10k chars of history (~2.5k tokens).
+        let maxHistoryChars = 10000
+        var currentChars = 0
+        var truncatedHistory: [VibeChatMessage] = []
+        for msg in history.reversed() {
+            let msgLen = msg.text.count
+            if currentChars + msgLen < maxHistoryChars {
+                truncatedHistory.insert(msg, at: 0)
+                currentChars += msgLen
+            } else {
+                break
+            }
+        }
+
+        // 3. Build Raw Prompt
+        var parts: [String] = ["__RAW_PROMPT__"]
+
+        for msg in truncatedHistory {
+            let content = msg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !content.isEmpty else { continue }
+
+            if isGemma4 {
+                let role = (msg.role == "user") ? "user" : "model"
+                parts.append("<|turn>\(role)\n\(content)<turn|>")
+            } else if isGemma {
+                let role = (msg.role == "user") ? "user" : "model"
+                parts.append("<start_of_turn>\(role)\n\(content)<end_of_turn>")
+            } else if isLlama {
+                if msg.role == "user" {
+                    parts.append("[INST] \(content) [/INST]")
+                } else {
+                    parts.append(content)
+                }
+            } else {
+                let prefix = (msg.role == "user") ? "User" : "Assistant"
+                parts.append("\(prefix): \(content)")
+            }
+        }
+
+        // 4. Final Open Turn
+        if isGemma4 {
+            parts.append("<|turn>user\n\(currentFilePrompt)<turn|>")
+            parts.append("<|turn>model\n")
+        } else if isGemma {
+            parts.append("<start_of_turn>user\n\(currentFilePrompt)<end_of_turn>")
+            parts.append("<start_of_turn>model\n")
+        } else if isLlama {
+            parts.append("[INST] \(currentFilePrompt) [/INST]")
+        } else {
+            parts.append("User: \(currentFilePrompt)")
+            parts.append("Assistant:")
+        }
+
+        return parts.joined(separator: "\n")
+    }
+
     private func createNewChatSession() {
         let title = "Chat \(chatSessions.count + 1)"
         let session = VibeChatSession(title: title)
         chatSessions.append(session)
         activeChatSessionId = session.id
     }
+
 
     private func clearActiveChat() {
         guard let idx = chatSessions.firstIndex(where: { $0.id == activeChatSessionId }) else { return }

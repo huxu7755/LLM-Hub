@@ -1475,67 +1475,88 @@ class ChatViewModel: ObservableObject {
 
     // MARK: - Multi-turn prompt builder
 
-    /// Formats the full conversation history into the model's native chat template so
-    /// the LLM has memory of all prior turns, not just the current message.
+    /// Formats the full conversation history into the model's native chat template.
+    /// Uses the __RAW_PROMPT__ prefix to bypass SDK auto-formatting, ensuring we have 
+    /// full control over the multi-turn sequence and context budget.
     @MainActor
     func buildMultiTurnPrompt(currentUserPrompt: String, ragPrefix: String? = nil) -> String {
-        let modelName  = selectedModelName.lowercased()
-        let isGemma    = modelName.contains("gemma")
-        let isDeepSeek = modelName.contains("deepseek") || modelName.contains("r1")
-        let isLlama    = modelName.contains("llama") || modelName.contains("mistral") || modelName.contains("qwen")
+        let modelName = selectedModelName.lowercased()
+        let isGemma  = modelName.contains("gemma")
+        let isGemma4 = isGemma && (modelName.contains("gemma 4") || modelName.contains("gemma-4"))
+        let isLlama  = modelName.contains("llama") || modelName.contains("mistral")
 
-        // Completed turns = everything except the last 2 entries
-        // (the new user message + the empty AI placeholder just appended before calling generate).
-        let history: [ChatMessage] = messages.count >= 2 ? Array(messages.dropLast(2)) : []
+        // 1. Identify history (exclude placeholder turns)
+        var history: [ChatMessage] = messages.count >= 2 ? Array(messages.dropLast(2)) : []
 
-        guard !history.isEmpty else {
-            // No prior turns — just send the bare prompt (chat template applied by the backend).
-            return currentUserPrompt
+        // 2. Context Window Management (Sliding Window)
+        // Approx 4 chars per token. Limit history to ~3000 tokens (12,000 chars)
+        // to leave room for RAG context and the new response.
+        let maxHistoryChars = 12000
+        var currentChars = 0
+        var truncatedHistory: [ChatMessage] = []
+        
+        // Walk backwards through history to keep most recent turns
+        for msg in history.reversed() {
+            let msgLen = msg.content.count
+            if currentChars + msgLen < maxHistoryChars {
+                truncatedHistory.insert(msg, at: 0)
+                currentChars += msgLen
+            } else {
+                break // Stop adding older messages
+            }
         }
+        history = truncatedHistory
 
+        // 3. Build the Raw Prompt String
         var parts: [String] = []
 
-        // Optionally inject RAG context as a system turn.
+        // Prepend the RAW prompt sentinel for the RunAnywhere SDK
+        // This prevents the SDK from wrapping our already-formatted string.
+        parts.append("__RAW_PROMPT__")
+
+        // Optionally inject RAG context or System Message as an opening turn.
         if let rag = ragPrefix, !rag.isEmpty {
-            if isGemma {
+            if isGemma4 {
+                parts.append("<|turn>user\n\(rag)<turn|>\n<|turn>model\nUnderstood.<turn|>")
+            } else if isGemma {
                 parts.append("<start_of_turn>user\n\(rag)<end_of_turn>\n<start_of_turn>model\nUnderstood.<end_of_turn>")
+            } else if isLlama {
+                parts.append("[INST] \(rag) [/INST]\nUnderstood.")
             } else {
-                parts.append(rag)
+                parts.append("System: \(rag)")
             }
         }
 
+        // Add history turns
         for msg in history {
             let content = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !content.isEmpty else { continue }
-            let role = msg.isFromUser ? "user" : "assistant"
 
-            if isGemma {
+            if isGemma4 {
+                let role = msg.isFromUser ? "user" : "model"
+                parts.append("<|turn>\(role)\n\(content)<turn|>")
+            } else if isGemma {
                 let gemmaRole = msg.isFromUser ? "user" : "model"
                 parts.append("<start_of_turn>\(gemmaRole)\n\(content)<end_of_turn>")
-            } else if isDeepSeek {
-                let tag = msg.isFromUser ? "<|User|>" : "<|Assistant|>"
-                parts.append("\(tag)\n\(content)")
             } else if isLlama {
-                let tag = msg.isFromUser ? "[INST]" : "[/INST]"
                 if msg.isFromUser {
-                    parts.append("\(tag) \(content) [/INST]")
+                    parts.append("[INST] \(content) [/INST]")
                 } else {
                     parts.append(content)
                 }
             } else {
-                // Generic: role-prefixed plain text that most instruction models understand.
-                let prefix = role == "user" ? "User" : "Assistant"
+                let prefix = msg.isFromUser ? "User" : "Assistant"
                 parts.append("\(prefix): \(content)")
             }
         }
 
-        // Append the new user turn (open-ended so the model fills in the response).
-        if isGemma {
+        // 4. Append the active new user prompt
+        if isGemma4 {
+            parts.append("<|turn>user\n\(currentUserPrompt)<turn|>")
+            parts.append("<|turn>model\n")
+        } else if isGemma {
             parts.append("<start_of_turn>user\n\(currentUserPrompt)<end_of_turn>")
-            parts.append("<start_of_turn>model")
-        } else if isDeepSeek {
-            parts.append("<|User|>\n\(currentUserPrompt)")
-            parts.append("<|Assistant|>")
+            parts.append("<start_of_turn>model\n")
         } else if isLlama {
             parts.append("[INST] \(currentUserPrompt) [/INST]")
         } else {
@@ -1546,6 +1567,7 @@ class ChatViewModel: ObservableObject {
         return parts.joined(separator: "\n")
     }
 }
+
 
 // MARK: - Message Bubble
 struct MessageBubble: View {
