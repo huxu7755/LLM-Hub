@@ -201,7 +201,7 @@ private func isTranslatorSupportedModel(_ model: AIModel) -> Bool {
 }
 
 private func usesGemma4TurnTemplate(_ model: AIModel) -> Bool {
-    model.name.hasPrefix("Translate Gemma 4B") || model.name.hasPrefix("Gemma 4 ")
+    model.name.hasPrefix("Gemma 4 ")
 }
 
 private func isNonTranslatorFeatureModel(_ model: AIModel) -> Bool {
@@ -1931,7 +1931,7 @@ private struct IOS17VibeVoiceScreen: View {
         // 3. Family Detection
         let modelName = selectedModelName.lowercased()
         let isGemma  = modelName.contains("gemma")
-        let isGemma4 = isGemma && (modelName.contains("gemma 4") || modelName.contains("gemma-4"))
+        let isGemma4 = isGemma && (modelName.contains("gemma 4 ") || modelName.contains("gemma-4 ") || modelName.hasSuffix("gemma 4") || modelName.hasSuffix("gemma-4"))
         let isLlama  = modelName.contains("llama") || modelName.contains("mistral")
 
         // 4. Build Raw Prompt (Prepend __RAW_PROMPT__ to bypass SDK auto-formatting)
@@ -1986,7 +1986,7 @@ private struct IOS17VibeVoiceScreen: View {
             do {
                 try await llm.generate(
                     prompt: multiTurnPrompt,
-                    systemPrompt: systemPrompt,
+                    systemPrompt: nil,
                     maxTokensOverride: Int(maxTokens)
                 ) { content, _, _ in
                     Task { @MainActor in
@@ -2848,37 +2848,14 @@ struct TranslatorScreen: View {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let targetName = englishName(for: target)
         let targetCode = target.code.replacingOccurrences(of: "_", with: "-")
-        let useGemma4Turns = selectedModel.map(usesGemma4TurnTemplate) ?? true
-        let userTurnStart = useGemma4Turns ? "<|turn>user" : "<start_of_turn>user"
-        let userTurnEnd = useGemma4Turns ? "<turn|>" : "<end_of_turn>"
-        let modelTurnStart = useGemma4Turns ? "<|turn>model" : "<start_of_turn>model"
-
-        let promptBody: String
-        if let source {
+        
+        if let source = source {
             let sourceName = englishName(for: source)
             let sourceCode = source.code.replacingOccurrences(of: "_", with: "-")
-            promptBody = """
-            \(userTurnStart)
-            You are a professional \(sourceName) (\(sourceCode)) to \(targetName) (\(targetCode)) translator. Your goal is to accurately convey the meaning and nuances of the original \(sourceName) text while adhering to \(targetName) grammar, vocabulary, and cultural sensitivities.
-            Produce only the \(targetName) translation, without any additional explanations or commentary. Please translate the following \(sourceName) text into \(targetName):
-
-
-            \(trimmedText)\(userTurnEnd)
-            \(modelTurnStart)
-            """
-        } else {
-            promptBody = """
-            \(userTurnStart)
-            You are a professional translator. Detect the source language of the text, then accurately translate it into \(targetName) (\(targetCode)) while preserving meaning and nuance.
-            Produce only the \(targetName) translation, without any additional explanations or commentary. Please translate the following text into \(targetName):
-
-
-            \(trimmedText)\(userTurnEnd)
-            \(modelTurnStart)
-            """
+            return "You are a professional \(sourceName) (\(sourceCode)) to \(targetName) (\(targetCode)) translator. Respond ONLY with the translation, no preamble or commentary.\n\n\(trimmedText)"
         }
 
-        return "__RAW_PROMPT__\n" + promptBody
+        return "You are a professional translator. Detect the source language and translate the following into \(targetName) (\(targetCode)). Respond ONLY with the translation, no preamble or commentary.\n\n\(trimmedText)"
     }
 
     private func buildPrompt() -> String {
@@ -4689,7 +4666,7 @@ struct VibeCoderScreen: View {
     private func buildVibeCoderMultiTurnPrompt(currentFilePrompt: String, sessionId: UUID) -> String {
         let modelName = selectedModelName.lowercased()
         let isGemma  = modelName.contains("gemma")
-        let isGemma4 = isGemma && (modelName.contains("gemma 4") || modelName.contains("gemma-4"))
+        let isGemma4 = isGemma && (modelName.contains("gemma 4 ") || modelName.contains("gemma-4 ") || modelName.hasSuffix("gemma 4") || modelName.hasSuffix("gemma-4"))
         let isLlama  = modelName.contains("llama") || modelName.contains("mistral")
 
         // 1. Get history (exclude placeholder turns)
@@ -4718,6 +4695,19 @@ struct VibeCoderScreen: View {
 
         // 3. Build Raw Prompt
         var parts: [String] = ["__RAW_PROMPT__"]
+
+        // 4. System Prompt (Coding Assistant)
+        let systemPrompt = "You are VibeCoder, a world-class on-device coding assistant. Provide clean, efficient, and correct code. Use markdown code blocks with language tags."
+        
+        if isGemma4 {
+            parts.append("<|turn>system\n\(systemPrompt)<turn|>")
+        } else if isGemma {
+            parts.append("<start_of_turn>system\n\(systemPrompt)<end_of_turn>")
+        } else if isLlama {
+            parts.append("<<SYS>>\n\(systemPrompt)\n<</SYS>>")
+        } else {
+            parts.append("System: \(systemPrompt)")
+        }
 
         for msg in truncatedHistory {
             let content = msg.text.trimmingCharacters(in: .whitespacesAndNewlines)
