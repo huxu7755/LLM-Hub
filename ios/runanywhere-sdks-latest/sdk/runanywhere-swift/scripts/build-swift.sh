@@ -227,7 +227,7 @@ build_commons() {
     log_info "This downloads dependencies and builds all frameworks..."
     [[ "$INCLUDE_MACOS" == true ]] && log_info "Including macOS support (this adds build time)"
     echo ""
-    "$COMMONS_BUILD_SCRIPT" $FLAGS --skip-macos
+    "$COMMONS_BUILD_SCRIPT" $FLAGS
 
     log_info "runanywhere-commons build complete"
 }

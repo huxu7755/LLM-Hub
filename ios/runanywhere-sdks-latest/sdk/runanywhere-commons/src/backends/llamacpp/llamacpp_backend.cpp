@@ -63,8 +63,6 @@ static const std::vector<std::string>& gemma_leading_artifacts() {
         "<start_of_turn>model\r\n",
         "<start_of_turn>model\n",
         "<start_of_turn>model",
-        "<|unused",
-        "<unused",
     };
     return artifacts;
 }
@@ -891,14 +889,6 @@ bool LlamaCppTextGeneration::generate_stream(const TextGenerationRequest& reques
     int n_cur = batch.n_tokens;
     int tokens_generated = 0;
     bool stop_sequence_hit = false;
-    int consecutive_artifact_count = 0;
-    int total_artifact_count = 0;
-    bool has_produced_real_content = false;
-    // Before any real content, allow a generous warmup budget (Gemma 4 at low
-    // quantizations can emit dozens of unused tokens before producing text).
-    // After real content has started, a tight limit catches infinite loops.
-    const int MAX_WARMUP_ARTIFACTS = 64;
-    const int MAX_CONSECUTIVE_ARTIFACTS_AFTER_CONTENT = 12;
 
     while (tokens_generated < effective_max_tokens && !cancel_requested_.load()) {
         const llama_token new_token_id = llama_sampler_sample(sampler_, context_, -1);
@@ -913,39 +903,10 @@ bool LlamaCppTextGeneration::generate_stream(const TextGenerationRequest& reques
         const std::string new_token_chars =
             common_token_to_piece(context_, new_token_id);
 
+        partial_utf8_buffer.append(new_token_chars);
+
         Utf8State scanner_state;
         size_t valid_upto = 0;
-
-        // Filter out "unused" or "channel" tokens that leak from Gemma 4
-        // We still decode them to keep KV cache consistent, but don't append to output.
-        bool is_artifact = (new_token_chars.find("<unused") != std::string::npos ||
-                           new_token_chars.find("<|unused") != std::string::npos ||
-                           new_token_chars.find("<|channel") != std::string::npos ||
-                           new_token_chars.find("<channel|") != std::string::npos ||
-                           new_token_chars.find("<|think|>") != std::string::npos);
-
-        if (is_artifact) {
-            consecutive_artifact_count++;
-            total_artifact_count++;
-            // Two-phase limit: generous before real content, tight after
-            int limit = has_produced_real_content
-                ? MAX_CONSECUTIVE_ARTIFACTS_AFTER_CONTENT
-                : MAX_WARMUP_ARTIFACTS;
-            if (consecutive_artifact_count >= limit) {
-                LOGI("Too many consecutive artifacts (%d, total=%d, has_content=%d), stopping.",
-                     consecutive_artifact_count, total_artifact_count, (int)has_produced_real_content);
-                break;
-            }
-        } else {
-            consecutive_artifact_count = 0;
-            has_produced_real_content = true;
-            partial_utf8_buffer.append(new_token_chars);
-        }
-
-        if (is_artifact) {
-            // Skip processing for artifacts, jump straight to decoding
-            goto decode_step;
-        }
         for (size_t i = 0; i < partial_utf8_buffer.size(); ++i) {
             scanner_state.process(static_cast<uint8_t>(partial_utf8_buffer[i]));
             if (scanner_state.state == 0) {
@@ -1022,7 +983,6 @@ bool LlamaCppTextGeneration::generate_stream(const TextGenerationRequest& reques
             }
         }
 
-    decode_step:
         batch.n_tokens = 0;
         common_batch_add(batch, new_token_id, n_cur, {0}, true);
 
