@@ -5,6 +5,7 @@ import RunAnywhere
 import Speech
 import SwiftUI
 import UniformTypeIdentifiers
+import WebKit
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -1881,9 +1882,11 @@ struct TypingIndicator: View {
     }
 }
 
-private enum ParsedSegment {
+private enum ParsedSegment: Hashable {
     case text(String)
     case code(language: String?, content: String)
+    case math(content: String, isBlock: Bool)
+    case table(String)
 }
 
 private struct RenderMessageSegments: View {
@@ -1898,22 +1901,56 @@ private struct RenderMessageSegments: View {
                 case .text(let text):
                     MarkdownMessageText(text: text)
                 case .code(let language, let content):
-                    VStack(alignment: .leading, spacing: 6) {
-                        if let language, !language.isEmpty {
-                            Text(language)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundColor(.white.opacity(0.65))
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            if let language, !language.isEmpty {
+                                Text(language)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundColor(.white.opacity(0.65))
+                            }
+                            Spacer()
+                            Button {
+                                UIPasteboard.general.string = content
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.6))
+                                    .padding(6)
+                                    .background(Color.white.opacity(0.1))
+                                    .clipShape(Circle())
+                            }
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.04))
+
                         ScrollView(.horizontal, showsIndicators: false) {
                             Text(content.trimmingCharacters(in: .newlines))
                                 .font(.system(.body, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.92))
+                                .padding(10)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-                    .padding(10)
                     .background(Color.white.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    )
+                case .math(let content, let isBlock):
+                    if isBlock {
+                        MathView(equation: content, isBlock: true)
+                            .frame(minHeight: 60)
+                            .padding(10)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(10)
+                    } else {
+                        MathView(equation: content, isBlock: false)
+                            .frame(width: 100, height: 30) // Inline math is tricky with WebView height
+                    }
+                case .table(let content):
+                    MarkdownTableView(rawTable: content)
                 }
             }
         }
@@ -1925,65 +1962,177 @@ private struct RenderMessageSegments: View {
         for marker in markers {
             value = value.replacingOccurrences(of: marker, with: "")
         }
-
-        // Render block math in a code-style block for readable display.
-        value = value.replacingOccurrences(
-            of: #"\$\$([\s\S]*?)\$\$"#,
-            with: "```math\n$1\n```",
-            options: .regularExpression
-        )
-        // Render inline math as inline code-style segment.
-        value = value.replacingOccurrences(
-            of: #"\$(?!\$)([^\n$]+)\$"#,
-            with: "`$1`",
-            options: .regularExpression
-        )
         return value
     }
 
     private func parseSegments(_ input: String) -> [ParsedSegment] {
-        let pattern = #"```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-            return [.text(input)]
-        }
+        let codePattern = #"```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```"#
+        let mathBlockPattern = #"\$\$([\s\S]*?)\$\$"#
+        let mathInlinePattern = #"\$(?!\$)([^\n$]+)\$"#
+        let tablePattern = #"(?:\n|^)(\|.*\|[ \t]*\n\|[ \t]*[:-].*\|[ \t]*\n(?:\|.*\|[ \t]*\n?)+)"#
 
-        let nsInput = input as NSString
-        let matches = regex.matches(in: input, options: [], range: NSRange(location: 0, length: nsInput.length))
-        if matches.isEmpty {
-            return [.text(input)]
-        }
+        let patterns = [
+            (codePattern, 0),
+            (mathBlockPattern, 1),
+            (mathInlinePattern, 2),
+            (tablePattern, 3)
+        ]
 
         var segments: [ParsedSegment] = []
         var cursor = 0
+        let nsInput = input as NSString
 
-        for match in matches {
-            if match.range.location > cursor {
-                let textPart = nsInput.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
-                if !textPart.isEmpty {
-                    segments.append(.text(textPart))
+        while cursor < nsInput.length {
+            var bestMatch: (NSTextCheckingResult, Int)? = nil
+
+            for (pattern, id) in patterns {
+                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+                   let match = regex.firstMatch(in: input, options: [], range: NSRange(location: cursor, length: nsInput.length - cursor)) {
+                    if bestMatch == nil || match.range.location < bestMatch!.0.range.location {
+                        bestMatch = (match, id)
+                    }
                 }
             }
 
-            let language: String? = {
-                let langRange = match.range(at: 1)
-                guard langRange.location != NSNotFound else { return nil }
-                let lang = nsInput.substring(with: langRange).trimmingCharacters(in: .whitespacesAndNewlines)
-                return lang.isEmpty ? nil : lang
-            }()
+            guard let (match, id) = bestMatch else {
+                let remaining = nsInput.substring(from: cursor)
+                if !remaining.isEmpty { segments.append(.text(remaining)) }
+                break
+            }
 
-            let code = nsInput.substring(with: match.range(at: 2))
-            segments.append(.code(language: language, content: code))
+            if match.range.location > cursor {
+                let textPart = nsInput.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+                if !textPart.isEmpty { segments.append(.text(textPart)) }
+            }
+
+            switch id {
+            case 0: // Code
+                let langRange = match.range(at: 1)
+                let language = langRange.location != NSNotFound ? nsInput.substring(with: langRange) : nil
+                let content = nsInput.substring(with: match.range(at: 2))
+                segments.append(.code(language: language, content: content))
+            case 1: // Math Block
+                let content = nsInput.substring(with: match.range(at: 1))
+                segments.append(.math(content: content, isBlock: true))
+            case 2: // Math Inline
+                let content = nsInput.substring(with: match.range(at: 1))
+                segments.append(.math(content: content, isBlock: false))
+            case 3: // Table
+                let content = nsInput.substring(with: match.range(at: 1))
+                segments.append(.table(content))
+            default: break
+            }
+
             cursor = match.range.location + match.range.length
         }
 
-        if cursor < nsInput.length {
-            let trailing = nsInput.substring(from: cursor)
-            if !trailing.isEmpty {
-                segments.append(.text(trailing))
+        return segments.isEmpty ? [.text(input)] : segments
+    }
+}
+
+private struct MathView: UIViewRepresentable {
+    let equation: String
+    let isBlock: Bool
+
+    func makeUIView(context: Context) -> WKWebView {
+        let webView = WKWebView()
+        webView.backgroundColor = .clear
+        webView.isOpaque = false
+        webView.scrollView.isScrollEnabled = false
+        return webView
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        let isDark = true // App is mainly dark
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+            <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+            <style>
+                body {
+                    margin: 0;
+                    padding: \(isBlock ? "10px" : "2px 4px");
+                    display: flex;
+                    justify-content: \(isBlock ? "center" : "flex-start");
+                    background: transparent;
+                    color: \(isDark ? "white" : "black");
+                    font-family: -apple-system;
+                    font-size: \(isBlock ? "1.1em" : "1.0em");
+                }
+                .katex-display { margin: 0; }
+            </style>
+        </head>
+        <body>
+            <div id="math"></div>
+            <script>
+                try {
+                    katex.render(\(equation.debugDescription), document.getElementById('math'), {
+                        throwOnError: false,
+                        displayMode: \(isBlock ? "true" : "false")
+                    });
+                } catch (e) {
+                    document.getElementById('math').textContent = \(equation.debugDescription);
+                }
+            </script>
+        </body>
+        </html>
+        """
+        uiView.loadHTMLString(html, baseURL: nil)
+    }
+}
+
+private struct MarkdownTableView: View {
+    let rawTable: String
+
+    var body: some View {
+        let rows = parseTable(rawTable)
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<rows.count, id: \.self) { rowIndex in
+                        HStack(spacing: 0) {
+                            ForEach(0..<rows[rowIndex].count, id: \.self) { colIndex in
+                                Text(rows[rowIndex][colIndex])
+                                    .font(rowIndex == 0 ? .body.bold() : .body)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .frame(minWidth: 80, alignment: .leading)
+                                    .background(rowIndex == 0 ? Color.white.opacity(0.12) : Color.clear)
+                                    .border(Color.white.opacity(0.15), width: 0.5)
+                            }
+                        }
+                    }
+                }
             }
         }
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .padding(.vertical, 4)
+    }
 
-        return segments
+    private func parseTable(_ raw: String) -> [[String]] {
+        let lines = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .newlines)
+        var result: [[String]] = []
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.replacingOccurrences(of: "|", with: "").replacingOccurrences(of: "-", with: "").replacingOccurrences(of: ":", with: "").trimmingCharacters(in: .whitespaces).isEmpty {
+                continue
+            }
+            let components = line.components(separatedBy: "|")
+            let validCells = components.enumerated().filter { (index, _) in
+                index > 0 && index < components.count - 1
+            }.map { $0.element.trimmingCharacters(in: .whitespaces) }
+            if !validCells.isEmpty { result.append(validCells) }
+        }
+        return result
     }
 }
 
@@ -1992,36 +2141,28 @@ private struct MarkdownMessageText: View {
 
     var body: some View {
         let normalizedText = text.replacingOccurrences(of: "\\n", with: "\n")
-        let lines = normalizedText.components(separatedBy: "\n")
-
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { indexedLine in
-                let line = indexedLine.element
-                if line.isEmpty {
-                    Color.clear
-                        .frame(height: 10)
-                } else if let attributed = try? AttributedString(
-                    markdown: line,
-                    options: .init(
-                        interpretedSyntax: .full,
-                        failurePolicy: .returnPartiallyParsedIfPossible
-                    )
-                ) {
-                    Text(attributed)
-                        .font(.body)
-                        .lineSpacing(4)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                } else {
-                    Text(line)
-                        .font(.body)
-                        .lineSpacing(4)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                }
-            }
+        
+        // Use full markdown parsing for each block of text to keep layout consistent
+        if let attributed = try? AttributedString(
+            markdown: normalizedText,
+            options: .init(
+                interpretedSyntax: .full,
+                failurePolicy: .returnPartiallyParsedIfPossible
+            )
+        ) {
+            Text(attributed)
+                .font(.body)
+                .lineSpacing(4)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+        } else {
+            Text(normalizedText)
+                .font(.body)
+                .lineSpacing(4)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
         }
     }
 }
