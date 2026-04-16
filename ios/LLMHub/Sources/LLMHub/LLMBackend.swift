@@ -539,6 +539,22 @@ class LLMBackend: ObservableObject {
 
         print("ℹ️ [LLMBackend] loadModel name=\(model.name) visionEnabled=\(enableVision) audioEnabled=\(enableAudio)")
 
+        // ALWAYS unload before loading.  llama.cpp maps model weights via mmap; attempting to
+        // mmap while a previous model is still resident causes "Cannot allocate memory" (-111).
+        //
+        // Critical: `unloadModel()` (the public fire-and-forget version) may have been called by
+        // another screen's onDisappear, resetting Swift state (isLoaded/loadedLLMModelId) while
+        // the C++ RunAnywhere.unloadModel() is still running.  We must AWAIT the C++ unload here
+        // unconditionally to guarantee the address space is clean before the new mmap.
+        do { try await RunAnywhere.unloadModel() } catch { /* no-op if nothing was loaded */ }
+        await RunAnywhere.unloadVLMModel()
+        self.isLoaded = false
+        self.currentlyLoadedModel = nil
+        self.loadedContextWindow = nil
+        self.loadedLLMModelId = nil
+        self.loadedVLMModelId = nil
+        self.loadedVLMProjectorPath = nil
+
         try await ensureSDKReady()
         let effectiveContext = clampedContextWindow(contextWindow, for: model)
         let runAnywhereModelId = activeRunAnywhereModelId(for: model)
