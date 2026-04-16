@@ -9,7 +9,6 @@ struct ChatSettingsSheet: View {
     @EnvironmentObject var settings: AppSettings
     @Environment(\.dismiss) var dismiss
     @State private var draftContextWindow: Double = 2048
-    @State private var draftMaxTokens: Double = 1024
     @State private var draftTopK: Double = 64
     @State private var draftTopP: Double = 0.95
     @State private var draftTemperature: Double = 1.0
@@ -38,7 +37,6 @@ struct ChatSettingsSheet: View {
                                         .font(.caption)
                                         .foregroundColor(.white.opacity(0.68))
                                 }
-                                .padding(.vertical, 4)
                                 
                                 Spacer()
                                 
@@ -53,9 +51,9 @@ struct ChatSettingsSheet: View {
                                 .pickerStyle(.menu)
                                 .accentColor(ApolloPalette.accentStrong)
                                 .labelsHidden()
+                                .fixedSize()
                             }
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
                         }
                         .padding()
                         .background(.ultraThinMaterial)
@@ -78,7 +76,6 @@ struct ChatSettingsSheet: View {
                             .padding(.bottom, 8)
                             
                             ConfigSlider(title: settings.localized("context_window_size"), value: $draftContextWindow, range: 1...modelMaxContextWindow, format: "%.0f", subtitle: "max \(Int(modelMaxContextWindow))", step: contextWindowStep, onCommit: applyDraftToViewModel)
-                            ConfigSlider(title: settings.localized("max_tokens"), value: $draftMaxTokens, range: 1...draftMaxTokensCap, format: "%.0f", subtitle: "<= context", onCommit: applyDraftToViewModel)
                             ConfigSlider(title: settings.localized("top_k"), value: $draftTopK, range: 1...256, format: "%.0f", onCommit: applyDraftToViewModel)
                             ConfigSlider(title: settings.localized("top_p"), value: $draftTopP, range: 0...1, format: "%.2f", onCommit: applyDraftToViewModel)
                             ConfigSlider(title: settings.localized("temperature"), value: $draftTemperature, range: 0...2, format: "%.2f", onCommit: applyDraftToViewModel)
@@ -118,13 +115,10 @@ struct ChatSettingsSheet: View {
                                     .padding(8)
                                     .scrollContentBackground(.hidden)
                                     .background(Color.white.opacity(0.06))
-                                    .cornerRadius(12)
                                     .foregroundColor(.white)
                                     .font(.body)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.14), lineWidth: 1))
                                 
                                 Text(settings.localized("model_system_prompt_hint"))
                                     .font(.caption)
@@ -241,12 +235,6 @@ struct ChatSettingsSheet: View {
             .onChange(of: vm.selectedModelName) { _, _ in
                 syncDraftFromViewModel()
             }
-            .onChange(of: draftContextWindow) { _, newValue in
-                let cap = min(max(1, newValue), modelMaxContextWindow)
-                if draftMaxTokens > cap {
-                    draftMaxTokens = cap
-                }
-            }
         }
     }
     
@@ -304,9 +292,6 @@ struct ChatSettingsSheet: View {
         return Double(max(1, advertised))
     }
 
-    private var draftMaxTokensCap: Double {
-        min(max(1, draftContextWindow), modelMaxContextWindow)
-    }
 
     private var contextWindowStep: Double {
         let maxWindow = max(1, Int(modelMaxContextWindow))
@@ -315,7 +300,6 @@ struct ChatSettingsSheet: View {
 
     private func syncDraftFromViewModel() {
         draftContextWindow = min(max(1, vm.contextWindow), modelMaxContextWindow)
-        draftMaxTokens = min(max(1, vm.maxTokens), min(max(1, draftContextWindow), modelMaxContextWindow))
         draftTopK = min(max(1, vm.topK), 256)
         draftTopP = min(max(0, vm.topP), 1)
         draftTemperature = min(max(0, vm.temperature), 2)
@@ -324,19 +308,18 @@ struct ChatSettingsSheet: View {
 
     private func applyDraftToViewModel() {
         let clampedContext = min(max(1, draftContextWindow), modelMaxContextWindow)
-        let clampedMaxTokens = min(max(1, draftMaxTokens), min(max(1, clampedContext), modelMaxContextWindow))
         let clampedTopK = min(max(1, draftTopK), 256)
         let clampedTopP = min(max(0, draftTopP), 1)
         let clampedTemperature = min(max(0, draftTemperature), 2)
 
         draftContextWindow = clampedContext
-        draftMaxTokens = clampedMaxTokens
         draftTopK = clampedTopK
         draftTopP = clampedTopP
         draftTemperature = clampedTemperature
 
         vm.contextWindow = clampedContext
-        vm.maxTokens = clampedMaxTokens
+        // maxTokens is set to full context — no artificial cap on output length
+        vm.maxTokens = clampedContext
         vm.topK = clampedTopK
         vm.topP = clampedTopP
         vm.temperature = clampedTemperature
@@ -345,7 +328,6 @@ struct ChatSettingsSheet: View {
 
     private func resetAllConfigsToDefaults() {
         draftContextWindow = min(2048, modelMaxContextWindow)
-        draftMaxTokens = min(4096, min(max(1, draftContextWindow), modelMaxContextWindow))
         draftTopK = 64
         draftTopP = 0.95
         draftTemperature = 1.0
