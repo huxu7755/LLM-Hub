@@ -888,7 +888,11 @@ class LLMBackend: ObservableObject {
         }
 
         let effectiveSystemPrompt: String?
-        if isHarmonyModel && !prompt.hasPrefix("__RAW_PROMPT__") {
+        if prompt.hasPrefix("__RAW_PROMPT__") {
+            // System prompt is already embedded in the formatted multi-turn prompt — don't pass it
+            // again via options or the SDK will prepend it a second time, breaking conversation history.
+            effectiveSystemPrompt = nil
+        } else if isHarmonyModel {
             effectiveSystemPrompt = nil
         } else {
             effectiveSystemPrompt = systemPrompt
@@ -1051,6 +1055,11 @@ class LLMBackend: ObservableObject {
         for try await token in streamResult.stream {
             chunkCount += 1
             currentOutput += token
+            // Strip <unusedN> thinking tokens (Gemma 4 emits these when thinking mode activates)
+            if currentOutput.contains("<unused") {
+                currentOutput = currentOutput.replacingOccurrences(
+                    of: #"<unused\d+>"#, with: "", options: .regularExpression)
+            }
             let normalizedOutput = isHarmonyModel ? Self.normalizeHarmonyOutput(currentOutput) : (currentOutput, false)
 
             if chunkCount == 1 {
@@ -1079,6 +1088,15 @@ class LLMBackend: ObservableObject {
         }
 
         let result = try await streamResult.result.value
+        // Strip trailing Gemma stop tokens that leak through when generation ends on EOG
+        let gemmaTrailingTokens = ["<end_of_turn>", "</s>", "<eos>"]
+        for tok in gemmaTrailingTokens {
+            if currentOutput.hasSuffix(tok) {
+                currentOutput = String(currentOutput.dropLast(tok.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
         let normalizedFinalOutput = isHarmonyModel ? Self.normalizeHarmonyOutput(currentOutput) : (currentOutput, false)
         let sdkThinking = result.thinkingContent?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) ?? ""
         let sdkHasThinking = !sdkThinking.isEmpty || (result.thinkingTokens ?? 0) > 0
