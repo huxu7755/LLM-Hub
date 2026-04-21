@@ -916,19 +916,13 @@ struct AboutScreen: View {
                 List {
                     // App identity header row
                     Section {
-                        HStack(spacing: 14) {
-                            Image(systemName: "brain.head.profile")
-                                .font(.system(size: 36))
-                                .foregroundColor(ApolloPalette.accentStrong)
-                                .frame(width: 48, height: 48)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(settings.localized("about_llm_hub"))
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                Text("v\(appVersion)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.white.opacity(0.55))
-                            }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(settings.localized("about_llm_hub"))
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Text("v\(appVersion)")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.55))
                         }
                         .padding(.vertical, 4)
                         .listRowBackground(Color.clear)
