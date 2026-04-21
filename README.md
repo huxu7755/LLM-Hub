@@ -2,20 +2,14 @@
 
 **LLM Hub** is an open-source mobile app for on-device LLM chat and image generation, available for both **Android** and **iOS**. It's optimized for mobile usage (CPU/GPU/NPU acceleration) and supports multiple model formats so you can run powerful models locally and privately.
 
-> **🍎 iOS version is now available!** Run powerful LLMs locally and privately on your iPhone and iPad.
->
-> [![Sponsor timmyy123](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=github-sponsors&logoColor=white&style=flat)](https://github.com/sponsors/timmyy123)
->
-> **Support the project:** Your support helps maintain the app and add new features. Sponsors get a free redemption code for the iOS version (if you haven't bought it yet) and early access to new builds.
-
 ## Download
 
-<div style="display:flex;gap:12px;align-items:center;">
-  <a href="https://play.google.com/store/apps/details?id=com.llmhub.llmhub">
-    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" width="240" />
+<div style="display:flex;gap:4px;align-items:center;">
+  <a href="https://play.google.com/store/apps/details?id=com.llmhub.llmhub" style="text-decoration:none;">
+    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="60" style="object-fit: contain;" />
   </a>
-  <a href="https://apps.apple.com/au/app/llm-hub/id6762511820">
-    <img src="https://developer.apple.com/app-store/marketing/guidelines/images/badge-download-on-the-app-store.svg" alt="Download on the App Store" width="210" style="margin-bottom: 12px;" />
+  <a href="https://apps.apple.com/au/app/llm-hub/id6762511820" style="text-decoration:none;">
+    <img src="https://developer.apple.com/app-store/marketing/guidelines/images/badge-download-on-the-app-store.svg" alt="Download on the App Store" height="40" style="object-fit: contain; padding-bottom: 2px;" />
   </a>
 </div>
 
