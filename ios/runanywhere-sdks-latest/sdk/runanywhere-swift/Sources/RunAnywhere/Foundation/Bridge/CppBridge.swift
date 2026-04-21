@@ -107,11 +107,11 @@ public enum CppBridge {
         // In development: C++ stderr ON for debugging
         rac_configure_logging(environment.cEnvironment)
 
-        // Step 2: Events callback (for analytics routing)
-        Events.register()
+        // Step 2: Events callback (for analytics routing) — disabled
+        // Events.register()
 
-        // Step 3: Telemetry manager (builds JSON, calls HTTP callback)
-        Telemetry.initialize(environment: environment)
+        // Step 3: Telemetry manager (builds JSON, calls HTTP callback) — disabled
+        // Telemetry.initialize(environment: environment)
 
         // Step 4: Device registration callbacks
         Device.register()

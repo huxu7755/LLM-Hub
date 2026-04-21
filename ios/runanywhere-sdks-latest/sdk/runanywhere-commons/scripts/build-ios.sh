@@ -12,6 +12,7 @@
 # OPTIONS:
 #   --skip-download     Skip downloading dependencies
 #   --skip-backends     Build RACommons only, skip backend frameworks
+#   --skip-simulator    Skip simulator slices (device-only build, faster)
 #   --backend NAME      Build specific backend: llamacpp, onnx, rag, all (default: all)
 #                       - llamacpp: LLM text generation (GGUF models)
 #                       - onnx: STT/TTS/VAD (Sherpa-ONNX models)
@@ -115,6 +116,7 @@ while [[ $# -gt 0 ]]; do
         --backend) BUILD_BACKEND="$2"; shift 2 ;;
         --include-macos) INCLUDE_MACOS=true; shift ;;
         --skip-macos) INCLUDE_MACOS=false; shift ;;
+        --skip-simulator) SKIP_SIMULATOR=true; shift ;;
         --clean) CLEAN_BUILD=true; shift ;;
         --release) BUILD_TYPE="Release"; shift ;;
         --debug) BUILD_TYPE="Debug"; shift ;;
@@ -378,7 +380,10 @@ create_xcframework() {
     log_step "Creating ${FRAMEWORK_NAME}.xcframework..."
 
     # Platforms to build frameworks for (iOS always, macOS if requested)
-    local PLATFORMS="OS SIMULATORARM64 SIMULATOR"
+    local PLATFORMS="OS"
+    if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
+        PLATFORMS="$PLATFORMS SIMULATORARM64 SIMULATOR"
+    fi
     if [[ "$INCLUDE_MACOS" == true ]]; then
         PLATFORMS="$PLATFORMS MACOS"
     fi
@@ -470,6 +475,7 @@ EOF
 EOF
     done
 
+    if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
     local SIM_FAT="${BUILD_DIR}/SIMULATOR_UNIVERSAL"
     rm -rf "${SIM_FAT}"
     mkdir -p "${SIM_FAT}/${FRAMEWORK_NAME}.framework"
@@ -487,6 +493,7 @@ EOF
         cp "${SIM_X64_BIN}" "${SIM_FAT}/${FRAMEWORK_NAME}.framework/${FRAMEWORK_NAME}"
         cp -R "${BUILD_DIR}/SIMULATOR/${FRAMEWORK_NAME}.framework/Headers" "${SIM_FAT}/${FRAMEWORK_NAME}.framework/"
     fi
+    fi  # end SKIP_SIMULATOR
 
     # Create XCFramework using library format (prevents SPM from embedding static libs)
     local XCFW_PATH="${DIST_DIR}/${FRAMEWORK_NAME}.xcframework"
@@ -496,13 +503,17 @@ EOF
     local IOS_LIB="${BUILD_DIR}/OS/lib${FRAMEWORK_NAME}.a"
     cp "${BUILD_DIR}/OS/${FRAMEWORK_NAME}.framework/${FRAMEWORK_NAME}" "${IOS_LIB}"
 
+    if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
     local SIM_LIB="${SIM_FAT}/lib${FRAMEWORK_NAME}.a"
     cp "${SIM_FAT}/${FRAMEWORK_NAME}.framework/${FRAMEWORK_NAME}" "${SIM_LIB}"
+    fi
 
     local XCFW_ARGS=(
         -library "${IOS_LIB}" -headers "${BUILD_DIR}/OS/${FRAMEWORK_NAME}.framework/Headers"
-        -library "${SIM_LIB}" -headers "${SIM_FAT}/${FRAMEWORK_NAME}.framework/Headers"
     )
+    if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
+        XCFW_ARGS+=(-library "${SIM_LIB}" -headers "${SIM_FAT}/${FRAMEWORK_NAME}.framework/Headers")
+    fi
 
     if [[ "$INCLUDE_MACOS" == true && -f "${BUILD_DIR}/MACOS/${FRAMEWORK_NAME}.framework/${FRAMEWORK_NAME}" ]]; then
         local MACOS_LIB="${BUILD_DIR}/MACOS/lib${FRAMEWORK_NAME}.a"
@@ -531,7 +542,10 @@ create_backend_xcframework() {
     local FOUND_ANY=false
 
     # Platforms to build frameworks for (iOS always, macOS if requested)
-    local PLATFORMS="OS SIMULATORARM64 SIMULATOR"
+    local PLATFORMS="OS"
+    if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
+        PLATFORMS="$PLATFORMS SIMULATORARM64 SIMULATOR"
+    fi
     if [[ "$INCLUDE_MACOS" == true ]]; then
         PLATFORMS="$PLATFORMS MACOS"
     fi
@@ -679,6 +693,7 @@ EOF
         return 0
     fi
 
+    if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
     local SIM_FAT="${BUILD_DIR}/SIMULATOR_UNIVERSAL"
     rm -rf "${SIM_FAT}"
     mkdir -p "${SIM_FAT}/${FRAMEWORK_NAME}.framework"
@@ -696,6 +711,7 @@ EOF
         cp "${SIM_X64_BIN}" "${SIM_FAT}/${FRAMEWORK_NAME}.framework/${FRAMEWORK_NAME}"
         cp -R "${BUILD_DIR}/SIMULATOR/${FRAMEWORK_NAME}.framework/Headers" "${SIM_FAT}/${FRAMEWORK_NAME}.framework/"
     fi
+    fi  # end SKIP_SIMULATOR
 
     # Create XCFramework using library format (prevents SPM from embedding static libs)
     local XCFW_PATH="${DIST_DIR}/${FRAMEWORK_NAME}.xcframework"
@@ -706,13 +722,17 @@ EOF
         local IOS_LIB="${BUILD_DIR}/OS/lib${FRAMEWORK_NAME}.a"
         cp "${BUILD_DIR}/OS/${FRAMEWORK_NAME}.framework/${FRAMEWORK_NAME}" "${IOS_LIB}"
 
+    if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
         local SIM_LIB="${SIM_FAT}/lib${FRAMEWORK_NAME}.a"
         cp "${SIM_FAT}/${FRAMEWORK_NAME}.framework/${FRAMEWORK_NAME}" "${SIM_LIB}"
+    fi
 
         local XCFW_ARGS=(
             -library "${IOS_LIB}" -headers "${BUILD_DIR}/OS/${FRAMEWORK_NAME}.framework/Headers"
-            -library "${SIM_LIB}" -headers "${SIM_FAT}/${FRAMEWORK_NAME}.framework/Headers"
         )
+        if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
+            XCFW_ARGS+=(-library "${SIM_LIB}" -headers "${SIM_FAT}/${FRAMEWORK_NAME}.framework/Headers")
+        fi
 
         if [[ "$INCLUDE_MACOS" == true && -f "${BUILD_DIR}/MACOS/${FRAMEWORK_NAME}.framework/${FRAMEWORK_NAME}" ]]; then
             local MACOS_LIB="${BUILD_DIR}/MACOS/lib${FRAMEWORK_NAME}.a"
@@ -790,8 +810,10 @@ main() {
     # Step 2: Build for all iOS platforms
     log_header "Building for iOS"
     build_platform "OS"
-    build_platform "SIMULATORARM64"
-    build_platform "SIMULATOR"
+    if [[ "${SKIP_SIMULATOR:-false}" != true ]]; then
+        build_platform "SIMULATORARM64"
+        build_platform "SIMULATOR"
+    fi
 
     # Step 2b: Build for macOS if requested
     if [[ "$INCLUDE_MACOS" == true ]]; then

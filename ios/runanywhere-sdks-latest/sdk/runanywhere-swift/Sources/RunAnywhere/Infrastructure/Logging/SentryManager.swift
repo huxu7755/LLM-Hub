@@ -24,47 +24,10 @@ public final class SentryManager: @unchecked Sendable {
     ///   - dsn: Sentry DSN (if nil, uses C++ config sentryDSN)
     ///   - environment: SDK environment for tagging events
     public func initialize(dsn: String? = nil, environment: SDKEnvironment = .development) {
-        guard !isInitialized else { return }
-
-        // Use provided DSN or fallback to C++ config
-        let sentryDSN = dsn ?? CppBridge.DevConfig.sentryDSN
-
-        guard let configuredDSN = sentryDSN,
-              configuredDSN != "YOUR_SENTRY_DSN_HERE" && !configuredDSN.isEmpty else {
-            // NOTE: Do NOT use SDKLogger here - it would cause a deadlock during Logging.shared initialization
-            #if DEBUG
-            // swiftlint:disable:next no_print_statements
-            print("🔍 [Sentry] DSN not configured. Crash reporting disabled.")
-            #endif
-            return
-        }
-
-        SentrySDK.start { options in
-            options.dsn = configuredDSN
-            options.environment = environment.rawValue
-            options.enableCrashHandler = true
-            options.enableAutoBreadcrumbTracking = true
-            options.enableAppHangTracking = true
-            options.appHangTimeoutInterval = 2.0
-            options.enableAutoSessionTracking = true
-            options.attachStacktrace = true
-            options.tracesSampleRate = 0
-
-            #if DEBUG
-            options.debug = true
-            options.diagnosticLevel = .warning
-            #else
-            options.debug = false
-            #endif
-
-            options.beforeSend = { event in
-                event.tags?["sdk_name"] = "RunAnywhere"
-                event.tags?["sdk_version"] = SDKConstants.version
-                return event
-            }
-        }
-
-        isInitialized = true
+        _ = dsn
+        _ = environment
+        isInitialized = false
+        return
     }
 
     // MARK: - Direct API (for advanced use cases)

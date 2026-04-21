@@ -396,73 +396,6 @@ private func sanitizeModelOutputText(_ text: String) -> String {
     .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-#if canImport(Network)
-@MainActor
-private final class FeatureLocalHTMLPreviewServer {
-    static let shared = FeatureLocalHTMLPreviewServer()
-
-    private var listener: NWListener?
-
-    func stop() {
-        listener?.cancel()
-        listener = nil
-    }
-
-    func start(html: String) async throws -> URL {
-        stop()
-
-        let params = NWParameters.tcp
-        params.requiredInterfaceType = .loopback
-        let listener = try NWListener(using: params, on: .any)
-        self.listener = listener
-
-        listener.newConnectionHandler = { connection in
-            connection.start(queue: .global(qos: .userInitiated))
-            Self.handle(connection: connection, html: html)
-        }
-
-        let port: UInt16 = try await withCheckedThrowingContinuation { continuation in
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    if let p = listener.port?.rawValue {
-                        continuation.resume(returning: p)
-                    } else {
-                        continuation.resume(throwing: NSError(domain: "FeatureLocalHTMLPreviewServer", code: 1))
-                    }
-                case .failed(let error):
-                    continuation.resume(throwing: error)
-                case .cancelled:
-                    break
-                default:
-                    break
-                }
-            }
-            listener.start(queue: .global(qos: .userInitiated))
-        }
-
-        guard let url = URL(string: "http://127.0.0.1:\(port)/") else {
-            throw NSError(domain: "FeatureLocalHTMLPreviewServer", code: 2)
-        }
-        return url
-    }
-
-    nonisolated private static func handle(connection: NWConnection, html: String) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { _, _, _, _ in
-            let body = html.data(using: .utf8) ?? Data()
-            let header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
-            var response = Data()
-            response.append(header.data(using: .utf8) ?? Data())
-            response.append(body)
-
-            connection.send(content: response, completion: .contentProcessed { _ in
-                connection.cancel()
-            })
-        }
-    }
-}
-#endif
-
 private extension View {
     func liquidGlassPrimaryButton(cornerRadius: CGFloat = 12) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -4380,9 +4313,7 @@ struct VibeCoderScreen: View {
             debouncedAutosaveTask?.cancel()
             debouncedAutosaveTask = nil
             llm.unloadModel()
-            #if canImport(Network)
-            FeatureLocalHTMLPreviewServer.shared.stop()
-            #endif
+            Task { await LocalHTMLPreviewServer.shared.stop() }
         }
     }
 
@@ -4644,27 +4575,14 @@ struct VibeCoderScreen: View {
     private func openHTMLPreviewInSafari() {
         let html = generatedCode
         guard !html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-
-        #if canImport(Network) && canImport(UIKit)
         Task { @MainActor in
             do {
-                let url = try await FeatureLocalHTMLPreviewServer.shared.start(html: html)
+                let url = try await LocalHTMLPreviewServer.shared.start(html: html)
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
             } catch {
                 errorMessage = error.localizedDescription
             }
         }
-        #elseif canImport(UIKit)
-        let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("LLMHub-Preview-\(UUID().uuidString)")
-            .appendingPathExtension("html")
-        do {
-            try html.write(to: fileURL, atomically: true, encoding: .utf8)
-            UIApplication.shared.open(fileURL, options: [:], completionHandler: nil)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        #endif
     }
 
     private func ensureModelLoaded(force: Bool) async {

@@ -1,83 +1,100 @@
 import Foundation
-#if canImport(Network)
-import Network
+import Darwin
 
-public final class LocalHTMLPreviewServer: @unchecked Sendable {
+// Loopback-only HTTP server using BSD POSIX sockets.
+// Does NOT use the Network framework, so it does NOT trigger the
+// iOS local network permission dialog.
+
+public actor LocalHTMLPreviewServer {
     public static let shared = LocalHTMLPreviewServer()
-    
-    private var listener: NWListener?
-    private var html: String = ""
-    
+
+    private var serverFD: Int32 = -1
+
     public func stop() {
-        listener?.cancel()
-        listener = nil
-        html = ""
+        if serverFD >= 0 {
+            Darwin.close(serverFD)
+            serverFD = -1
+        }
     }
-    
-    public func start(html: String) async throws -> URL {
+
+    public func start(html: String) throws -> URL {
         stop()
-        self.html = html
-        
-        let params = NWParameters.tcp
-        params.requiredInterfaceType = .loopback
-        let listener = try NWListener(using: params, on: .any)
-        self.listener = listener
-        
-        listener.newConnectionHandler = { connection in
-            connection.start(queue: .global(qos: .userInitiated))
-            Self.handle(connection: connection, html: html)
-        }
-        
-        let port: UInt16 = try await withCheckedThrowingContinuation { continuation in
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    if let p = listener.port?.rawValue {
-                        continuation.resume(returning: p)
-                    } else {
-                        continuation.resume(throwing: NSError(domain: "LocalHTMLPreviewServer", code: 1))
-                    }
-                case .failed(let error):
-                    continuation.resume(throwing: error)
-                case .cancelled:
-                    break 
-                default:
-                    break
-                }
+
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { throw POSIXError(.ENOTSOCK) }
+
+        var yes: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+
+        // Bind to 127.0.0.1 on an OS-chosen port
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = 0
+        addr.sin_addr.s_addr = CFSwapInt32HostToBig(UInt32(INADDR_LOOPBACK))
+        let bindResult = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
-            listener.start(queue: .global(qos: .userInitiated))
         }
-        
+        guard bindResult == 0 else {
+            Darwin.close(fd)
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EADDRINUSE)
+        }
+
+        guard Darwin.listen(fd, 5) == 0 else {
+            Darwin.close(fd)
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .ECONNREFUSED)
+        }
+
+        // Read back the assigned port
+        var boundAddr = sockaddr_in()
+        var len = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &boundAddr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(fd, $0, &len)
+            }
+        }
+        let port = CFSwapInt16BigToHost(boundAddr.sin_port)
+
+        serverFD = fd
+
+        // Accept loop on background thread
+        let htmlCopy = html
+        Thread.detachNewThread {
+            Self.acceptLoop(fd: fd, html: htmlCopy)
+        }
+
         guard let url = URL(string: "http://127.0.0.1:\(port)/") else {
-            throw NSError(domain: "LocalHTMLPreviewServer", code: 3)
+            throw POSIXError(.EINVAL)
         }
         return url
     }
-    
-    private static func handle(connection: NWConnection, html: String) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, _, _ in
-            let request = String(data: data ?? Data(), encoding: .utf8) ?? ""
-            let firstLine = request.split(separator: "\n").first.map(String.init) ?? ""
-            let isFavicon = firstLine.contains("/favicon")
-            
-            if isFavicon {
-                let response = "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"
-                connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                    connection.cancel()
-                })
-                return
+
+    private static func acceptLoop(fd: Int32, html: String) {
+        while true {
+            let clientFD = Darwin.accept(fd, nil, nil)
+            if clientFD < 0 { break }
+            let htmlCopy = html
+            Thread.detachNewThread {
+                Self.handle(clientFD: clientFD, html: htmlCopy)
             }
-            
-            let bodyData = html.data(using: .utf8) ?? Data()
-            let header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(bodyData.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
-            var response = Data()
-            response.append(header.data(using: .utf8) ?? Data())
-            response.append(bodyData)
-            
-            connection.send(content: response, completion: .contentProcessed { _ in
-                connection.cancel()
-            })
+        }
+    }
+
+    private static func handle(clientFD: Int32, html: String) {
+        defer { Darwin.close(clientFD) }
+
+        // Read request (we don't need to parse it)
+        var buf = [UInt8](repeating: 0, count: 4096)
+        _ = Darwin.recv(clientFD, &buf, buf.count, 0)
+
+        let bodyData = html.data(using: .utf8) ?? Data()
+        let header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(bodyData.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+        var response = Data()
+        response.append(header.data(using: .utf8)!)
+        response.append(bodyData)
+        response.withUnsafeBytes { ptr in
+            _ = Darwin.send(clientFD, ptr.baseAddress!, ptr.count, 0)
         }
     }
 }
-#endif

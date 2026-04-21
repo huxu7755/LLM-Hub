@@ -100,7 +100,7 @@ public struct LoggingConfiguration: Sendable {
             enableLocalLogging: true,
             minLogLevel: .debug,
             includeDeviceMetadata: false,
-            enableSentryLogging: true
+            enableSentryLogging: false
         )
     }
 

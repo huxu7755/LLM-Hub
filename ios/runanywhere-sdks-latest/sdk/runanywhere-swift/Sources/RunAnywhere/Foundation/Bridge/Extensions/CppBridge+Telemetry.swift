@@ -99,9 +99,9 @@ extension CppBridge {
                 }
             }
 
-            // Register HTTP callback - Swift provides HTTP transport for C++
-            let userData = Unmanaged.passUnretained(Telemetry.self as AnyObject).toOpaque()
-            rac_telemetry_manager_set_http_callback(manager, telemetryHttpCallback, userData)
+            // HTTP callback intentionally not registered — telemetry disabled
+            // let userData = Unmanaged.passUnretained(Telemetry.self as AnyObject).toOpaque()
+            // rac_telemetry_manager_set_http_callback(manager, telemetryHttpCallback, userData)
         }
 
         /// Shutdown telemetry manager
