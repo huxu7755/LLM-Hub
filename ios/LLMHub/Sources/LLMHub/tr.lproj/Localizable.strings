@@ -41,7 +41,7 @@
 "unload_model" = "Modeli Kaldır";
 "reload_model" = "Modeli Yeniden Yükle";
 "about_llm_hub" = "LLM Hub Hakkında";
-"about_description" = "LLM Hub, Büyük Dil Modellerinin gücünü doğrudan mobil cihazınıza getiren açık kaynaklı bir Android uygulamasıdır. Gemma, Llama ve Phi gibi son teknoloji modellerle yapay zeka konuşmaları yaşayın - hepsi maksimum gizlilik ve çevrimdışı erişilebilirlik için telefonunuzda yerel olarak çalışıyor.";
+"about_description" = "LLM Hub, Büyük Dil Modellerinin gücünü doğrudan mobil cihazınıza getiren açık kaynaklı bir uygulamadır. Gemma, Llama ve Phi gibi son teknoloji modellerle yapay zeka konuşmaları yaşayın - hepsi maksimum gizlilik ve çevrimdışı erişilebilirlik için telefonunuzda yerel olarak çalışıyor.";
 "key_features" = "Temel Özellikler";
 "feature_multiple_models" = "🤖 Çoklu LLM Modelleri: Gemma-3, Llama-3.2, Phi-4 ve Translate Gemma";
 "feature_on_device" = "📱 Cihaz Üzerinde İşleme: Tam gizlilik, internet gerekmiyor";
@@ -53,7 +53,7 @@
 "developer_info" = "Geliştirici Bilgisi";
 "about_developer_info" = "Bu proje, yapay zeka teknolojisini herkes için daha erişilebilir hale getirmeye tutkulu bir meraklı tarafından geliştirilmiştir. Geri bildiriminiz ve katkılarınız her zaman beklenir!";
 "tech_stack" = "Teknoloji Yığını";
-"about_tech_stack" = "LLM Hub, modern Android geliştirme teknolojileri kullanılarak oluşturulmuştur: Kotlin, Jetpack Compose, Material Design 3 ve cihaz üzerinde verimli çıkarım için llama.cpp kütüphanesi.";
+"about_tech_stack" = "LLM Hub, Swift, SwiftUI ve cihaz üzerinde verimli çıkarım için llama.cpp kütüphanesi kullanılarak oluşturulmuştur.";
 "tech_kotlin_compose" = "🏗️ Kotlin ve Jetpack Compose ile geliştirildi";
 "tech_mediapipe_litert" = "🧠 MediaPipe ve LiteRT tarafından destekleniyor";
 "tech_quantization" = "🚀 INT4/INT8 kuantalama ile optimize edildi";
@@ -79,7 +79,7 @@
 "tos_acceptance_title" = "1. Şartların Kabulü";
 "tos_acceptance_text" = "LLM Hub\'ı indirerek, yükleyerek veya kullanarak, bu Hizmet Şartlarını okuduğunuzu, anladığınızı ve bunlara bağlı kalmayı kabul ettiğinizi onaylarsınız. Bu şartları kabul etmiyorsanız, lütfen uygulamayı kullanmayın.";
 "tos_app_description_title" = "2. Uygulama Açıklaması";
-"tos_app_description_text" = "LLM Hub, cihaz üzerinde yapay zeka konuşmaları için Büyük Dil Modellerine (LLM\'ler) erişim sağlayan açık kaynaklı bir Android uygulamasıdır. Uygulama tüm verileri cihazınızda yerel olarak işler ve kişisel bilgileri harici sunuculara iletmez.";
+"tos_app_description_text" = "LLM Hub, cihaz üzerinde yapay zeka konuşmaları için Büyük Dil Modellerine (LLM\'ler) erişim sağlayan açık kaynaklı bir uygulamadır. Uygulama tüm verileri cihazınızda yerel olarak işler ve kişisel bilgileri harici sunuculara iletmez.";
 "tos_user_responsibilities_title" = "3. Kullanıcı Sorumlulukları";
 "tos_user_responsibilities_text" = "LLM Hub\'ı sorumlu bir şekilde ve geçerli yasalara uygun olarak kullanmayı kabul edersiniz. Sorumlusunuz:\n\n• Uygulamayı yalnızca yasal amaçlar için kullanmaktan\n• Uygulamayı tersine mühendislik yapmaya veya değiştirmeye çalışmamaktan\n• Uygulamayı zararlı, yasa dışı veya saldırgan içerik oluşturmak için kullanmamaktan\n• Üçüncü tarafların fikri mülkiyet haklarına saygı göstermekten\n• Cihazınızın düzgün çalışması için minimum gereksinimleri karşıladığından emin olmaktan";
 "tos_privacy_data_title" = "4. Gizlilik ve Veriler";

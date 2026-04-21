@@ -40,7 +40,7 @@
 "unload_model" = "Décharger le modèle";
 "reload_model" = "Recharger le modèle";
 "about_llm_hub" = "À propos de LLM Hub";
-"about_description" = "LLM Hub est une application Android open-source qui apporte la puissance des Large Language Models directement sur votre appareil mobile.";
+"about_description" = "LLM Hub est une application open-source qui apporte la puissance des Large Language Models directement sur votre appareil mobile.";
 "key_features" = "Fonctionnalités Clés";
 "feature_multiple_models" = "Modèles LLM Multiples : Gemma-3, Llama-3.2, Phi-4, et Translate Gemma";
 "feature_on_device" = "Traitement sur Appareil : Confidentialité complète, aucun internet requis";
@@ -52,7 +52,7 @@
 "developer_info" = "Informations Développeur";
 "about_developer_info" = "Ce projet est développé par un passionné désireux de rendre la technologie IA plus accessible à tous.";
 "tech_stack" = "Pile Technologique";
-"about_tech_stack" = "LLM Hub est construit en utilisant des technologies modernes de développement Android.";
+"about_tech_stack" = "LLM Hub est construit avec Swift, SwiftUI et la bibliothèque llama.cpp pour une inférence efficace sur l'appareil.";
 "tech_kotlin_compose" = "Construit avec Kotlin & Jetpack Compose";
 "tech_mediapipe_litert" = "Alimenté par MediaPipe & LiteRT";
 "tech_quantization" = "Optimisé avec la quantification INT4/INT8";
@@ -78,7 +78,7 @@
 "tos_acceptance_title" = "1. Acceptation des Conditions";
 "tos_acceptance_text" = "En téléchargeant, installant ou utilisant LLM Hub, vous reconnaissez avoir lu, compris et accepté d\'être lié par ces Conditions d\'Utilisation.";
 "tos_app_description_title" = "2. Description de l\'Application";
-"tos_app_description_text" = "LLM Hub est une application Android open-source qui fournit l\'accès aux Grands Modèles de Langage (LLMs) pour des conversations IA sur l\'appareil.";
+"tos_app_description_text" = "LLM Hub est une application open-source qui fournit l\'accès aux Grands Modèles de Langage (LLMs) pour des conversations IA sur l\'appareil.";
 "tos_user_responsibilities_title" = "3. Responsabilités de l\'Utilisateur";
 "tos_user_responsibilities_text" = "Vous acceptez d\'utiliser LLM Hub de manière responsable et en conformité avec les lois applicables.";
 "tos_privacy_data_title" = "4. Confidentialité et Données";

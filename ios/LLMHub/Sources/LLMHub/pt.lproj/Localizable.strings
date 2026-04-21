@@ -40,7 +40,7 @@
 "unload_model" = "Descarregar Modelo";
 "reload_model" = "Recarregar Modelo";
 "about_llm_hub" = "Sobre o LLM Hub";
-"about_description" = "LLM Hub é uma aplicação Android de código aberto que traz o poder dos Modelos de Linguagem Grande diretamente para o seu dispositivo móvel. Experimente conversas de IA com modelos de última geração como Gemma, Llama e Phi - todos executando localmente no seu telefone para máxima privacidade e acessibilidade offline.";
+"about_description" = "LLM Hub é uma aplicação de código aberto que traz o poder dos Modelos de Linguagem Grande diretamente para o seu dispositivo móvel. Experimente conversas de IA com modelos de última geração como Gemma, Llama e Phi - todos executando localmente no seu telefone para máxima privacidade e acessibilidade offline.";
 "key_features" = "Recursos Principais";
 "feature_multiple_models" = "🤖 Múltiplos Modelos LLM: Gemma-3, Llama-3.2, Phi-4, e Translate Gemma";
 "feature_on_device" = "📱 Processamento no Dispositivo: Privacidade completa, não requer internet";
@@ -52,7 +52,7 @@
 "developer_info" = "Informações do Desenvolvedor";
 "about_developer_info" = "Este projeto é desenvolvido por um entusiasta apaixonado por tornar a tecnologia de IA mais acessível para todos. Seus comentários e contribuições são sempre bem-vindos!";
 "tech_stack" = "Stack Tecnológico";
-"about_tech_stack" = "LLM Hub é construído usando tecnologias modernas de desenvolvimento Android: Kotlin, Jetpack Compose, Material Design 3, e a biblioteca llama.cpp para inferência eficiente no dispositivo.";
+"about_tech_stack" = "LLM Hub é construído usando Swift, SwiftUI e a biblioteca llama.cpp para inferência eficiente no dispositivo.";
 "tech_kotlin_compose" = "🏗️ Construído com Kotlin e Jetpack Compose";
 "tech_mediapipe_litert" = "🧠 Impulsionado por MediaPipe e LiteRT";
 "tech_quantization" = "🚀 Otimizado com quantização INT4/INT8";
@@ -166,7 +166,7 @@
 "tos_acceptance_title" = "1. Aceitação dos Termos";
 "tos_acceptance_text" = "Ao baixar, instalar ou usar o LLM Hub, você reconhece que leu, entendeu e concorda em estar sujeito a estes Termos de Serviço. Se você não concorda com estes termos, por favor não use a aplicação.";
 "tos_app_description_title" = "2. Descrição da Aplicação";
-"tos_app_description_text" = "LLM Hub é uma aplicação Android de código aberto que fornece acesso a Modelos de Linguagem Grandes (LLMs) para conversas de IA no dispositivo. A aplicação processa todos os dados localmente em seu dispositivo e não transmite informações pessoais para servidores externos.";
+"tos_app_description_text" = "LLM Hub é uma aplicação de código aberto que fornece acesso a Modelos de Linguagem Grandes (LLMs) para conversas de IA no dispositivo. A aplicação processa todos os dados localmente em seu dispositivo e não transmite informações pessoais para servidores externos.";
 "ai_models" = "Modelos de IA";
 "download_ai_models" = "Baixar Modelos de IA";
 "choose_text_multimodal_models" = "Escolha entre modelos de texto ou multimodais";

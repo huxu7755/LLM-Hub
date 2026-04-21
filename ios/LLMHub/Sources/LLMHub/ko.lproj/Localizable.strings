@@ -41,7 +41,7 @@
 "unload_model" = "모델 언로드";
 "reload_model" = "모델 다시 로드";
 "about_llm_hub" = "LLM Hub 정보";
-"about_description" = "LLM Hub는 대형 언어 모델의 강력한 기능을 모바일 기기로 직접 제공하는 오픈 소스 안드로이드 애플리케이션입니다. Gemma, Llama, Phi와 같은 최첨단 모델로 AI 대화를 경험하세요 - 모두 최대한의 프라이버시와 오프라인 접근성을 위해 휴대폰에서 로컬로 실행됩니다.";
+"about_description" = "LLM Hub는 대형 언어 모델의 강력한 기능을 모바일 기기로 직접 제공하는 오픈 소스 애플리케이션입니다. Gemma, Llama, Phi와 같은 최첨단 모델로 AI 대화를 경험하세요 - 모두 최대한의 프라이버시와 오프라인 접근성을 위해 휴대폰에서 로컬로 실행됩니다.";
 "key_features" = "주요 기능";
 "feature_multiple_models" = "🤖 다양한 LLM 모델: Gemma-3, Llama-3.2, Phi-4, Translate Gemma";
 "feature_on_device" = "📱 기기 내 처리: 완전한 프라이버시, 인터넷 불필요";
@@ -53,7 +53,7 @@
 "developer_info" = "개발자 정보";
 "about_developer_info" = "이 프로젝트는 AI 기술을 모두에게 더 접근 가능하게 만드는 데 열정적인 애호가가 개발했습니다. 여러분의 피드백과 기여는 언제나 환영합니다!";
 "tech_stack" = "기술 스택";
-"about_tech_stack" = "LLM Hub는 현대적인 안드로이드 개발 기술을 사용하여 구축되었습니다: Kotlin, Jetpack Compose, Material Design 3, 그리고 효율적인 기기 내 추론을 위한 llama.cpp 라이브러리.";
+"about_tech_stack" = "LLM Hub는 Swift, SwiftUI, 그리고 효율적인 기기 내 추론을 위한 llama.cpp 라이브러리를 사용하여 구축되었습니다.";
 "tech_kotlin_compose" = "🏗️ Kotlin & Jetpack Compose로 구축";
 "tech_mediapipe_litert" = "🧠 MediaPipe & LiteRT로 구동";
 "tech_quantization" = "🚀 INT4/INT8 양자화로 최적화";

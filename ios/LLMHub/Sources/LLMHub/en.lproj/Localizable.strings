@@ -41,7 +41,7 @@
 "unload_model" = "Unload Model";
 "reload_model" = "Reload Model";
 "about_llm_hub" = "About LLM Hub";
-"about_description" = "LLM Hub is an open-source Android application that brings the power of Large Language Models directly to your mobile device. Experience AI conversations with state-of-the-art models like Gemma, Llama, and Phi - all running locally on your phone for maximum privacy and offline accessibility.";
+"about_description" = "LLM Hub is an open-source application that brings the power of Large Language Models directly to your mobile device. Experience AI conversations with state-of-the-art models like Gemma, Llama, and Phi - all running locally on your phone for maximum privacy and offline accessibility.";
 "key_features" = "Key Features";
 "feature_multiple_models" = "🤖 Multiple LLM Models: Gemma-3, Llama-3.2, Phi-4, and Translate Gemma";
 "feature_on_device" = "📱 On-Device Processing: Complete privacy, no internet required";
@@ -53,7 +53,7 @@
 "developer_info" = "Developer Info";
 "about_developer_info" = "This project is developed by an enthusiast passionate about making AI technology more accessible to everyone. Your feedback and contributions are always welcome!";
 "tech_stack" = "Tech Stack";
-"about_tech_stack" = "LLM Hub is built using modern Android development technologies: Kotlin, Jetpack Compose, Material Design 3, and the llama.cpp library for efficient on-device inference.";
+"about_tech_stack" = "LLM Hub is built using Swift, SwiftUI, and the llama.cpp library for efficient on-device inference.";
 "tech_kotlin_compose" = "🏗️ Built with Kotlin & Jetpack Compose";
 "tech_mediapipe_litert" = "🧠 Powered by MediaPipe & LiteRT";
 "tech_quantization" = "🚀 Optimized with INT4/INT8 quantization";
@@ -81,7 +81,7 @@
 "tos_acceptance_title" = "1. Acceptance of Terms";
 "tos_acceptance_text" = "By downloading, installing, or using LLM Hub, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the application.";
 "tos_app_description_title" = "2. Application Description";
-"tos_app_description_text" = "LLM Hub is an open-source Android application that provides access to Large Language Models (LLMs) for on-device AI conversations. The app processes all data locally on your device and does not transmit personal information to external servers.";
+"tos_app_description_text" = "LLM Hub is an open-source application that provides access to Large Language Models (LLMs) for on-device AI conversations. The app processes all data locally on your device and does not transmit personal information to external servers.";
 "tos_user_responsibilities_title" = "3. User Responsibilities";
 "tos_user_responsibilities_text" = "You agree to use LLM Hub responsibly and in accordance with applicable laws. You are responsible for:\n\n• Using the application for lawful purposes only\n• Not attempting to reverse engineer or modify the application\n• Not using the application to generate harmful, illegal, or offensive content\n• Respecting the intellectual property rights of third parties\n• Ensuring your device meets the minimum requirements for proper operation";
 "tos_privacy_data_title" = "4. Privacy and Data";

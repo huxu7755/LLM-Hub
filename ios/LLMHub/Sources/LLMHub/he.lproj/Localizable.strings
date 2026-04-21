@@ -41,7 +41,7 @@
 "unload_model" = "פרוק מודל";
 "reload_model" = "טען מודל מחדש";
 "about_llm_hub" = "על LLM Hub";
-"about_description" = "LLM Hub היא אפליקציית אנדרואיד בקוד פתוח שמביאה את כוחם של מודלי שפה גדולים ישירות למכשיר הנייד שלך. חווה שיחות AI עם מודלים מתקדמים כמו Gemma, ‏Llama ו-Phi — כולם רצים מקומית על הטלפון שלך לפרטיות מירבית ונגישות לא מקוונת.";
+"about_description" = "LLM Hub היא אפליקציה בקוד פתוח שמביאה את כוחם של מודלי שפה גדולים ישירות למכשיר הנייד שלך. חווה שיחות AI עם מודלים מתקדמים כמו Gemma, ‏Llama ו-Phi — כולם רצים מקומית על הטלפון שלך לפרטיות מירבית ונגישות לא מקוונת.";
 "key_features" = "תכונות עיקריות";
 "feature_multiple_models" = "🤖 מספר מודלי LLM: ‏Gemma-3, ‏Llama-3.2, ‏Phi-4 ו-Translate Gemma";
 "feature_on_device" = "📱 עיבוד על המכשיר: פרטיות מלאה, ללא צורך באינטרנט";
@@ -53,7 +53,7 @@
 "developer_info" = "מידע למפתח";
 "about_developer_info" = "הפרויקט מפותח על ידי חובב נלהב ששם למטרה להנגיש את טכנולוגיית ה-AI לכולם. משוב ותרומות תמיד יתקבלו בברכה!";
 "tech_stack" = "מחסנית טכנולוגית";
-"about_tech_stack" = "LLM Hub נבנתה בטכנולוגיות אנדרואיד מודרניות: ‏Kotlin, ‏Jetpack Compose, ‏Material Design 3 וספריית llama.cpp לעיבוד יעיל על המכשיר.";
+"about_tech_stack" = "LLM Hub נבנתה עם Swift, ‏SwiftUI וספריית llama.cpp לעיבוד יעיל על המכשיר.";
 "tech_kotlin_compose" = "🏗️ נבנה עם Kotlin ו-Jetpack Compose";
 "tech_mediapipe_litert" = "🧠 מופעל על ידי MediaPipe ו-LiteRT";
 "tech_quantization" = "🚀 אופטימיזציה עם קוונטיזציה ‏INT4/INT8";

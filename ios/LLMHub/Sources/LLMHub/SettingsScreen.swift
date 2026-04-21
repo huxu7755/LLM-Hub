@@ -16,6 +16,8 @@ struct SettingsScreen: View {
     @State private var showMemoryClearConfirm = false
     @State private var memoryStatusMessage: String? = nil
     @StateObject private var ragManager = RagServiceManager.shared
+    @State private var showAbout = false
+    @State private var showTerms = false
 
     var body: some View {
         ZStack {
@@ -121,7 +123,7 @@ struct SettingsScreen: View {
                         iconColor: ApolloPalette.accentStrong,
                         titleKey: "about",
                         subtitleKey: "app_information_contact"
-                    ) { }
+                    ) { showAbout = true }
                     .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
                     .listRowBackground(Color.clear)
 
@@ -130,7 +132,7 @@ struct SettingsScreen: View {
                         iconColor: ApolloPalette.accentStrong,
                         titleKey: "terms_of_service",
                         subtitleKey: "legal_terms_conditions"
-                    ) { }
+                    ) { showTerms = true }
                     .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
                     .listRowBackground(Color.clear)
                 } header: {
@@ -181,6 +183,14 @@ struct SettingsScreen: View {
         // Memory Manager Sheet
         .sheet(isPresented: $showMemoryDialog) {
             MemoryManagerSheet(onDismiss: { showMemoryDialog = false })
+                .environmentObject(settings)
+        }
+        .sheet(isPresented: $showAbout) {
+            AboutScreen()
+                .environmentObject(settings)
+        }
+        .sheet(isPresented: $showTerms) {
+            TermsOfServiceScreen()
                 .environmentObject(settings)
         }
         .onChange(of: settings.selectedEmbeddingModelId) { _, newId in
@@ -883,5 +893,173 @@ struct SettingsToggleRow: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.16), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - About Screen
+
+struct AboutScreen: View {
+    @EnvironmentObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                ApolloLiquidBackground()
+
+                List {
+                    // App identity header row
+                    Section {
+                        HStack(spacing: 14) {
+                            Image(systemName: "brain.head.profile")
+                                .font(.system(size: 36))
+                                .foregroundColor(ApolloPalette.accentStrong)
+                                .frame(width: 48, height: 48)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(settings.localized("about_llm_hub"))
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Text("v\(appVersion)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.white.opacity(0.55))
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+                    }
+
+                    Section {
+                        Text(settings.localized("about_description"))
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.85))
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+                    } header: {
+                        SectionHeader(titleKey: "about", icon: "info.circle")
+                    }
+
+                    Section {
+                        Text(settings.localized("about_developer_info"))
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.85))
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+                    } header: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.circle")
+                                .foregroundColor(ApolloPalette.accentStrong)
+                            Text("Developer")
+                        }
+                        .font(.footnote.bold())
+                        .foregroundColor(.white.opacity(0.74))
+                        .textCase(nil)
+                    }
+
+                    Section {
+                        Text(settings.localized("about_tech_stack"))
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.85))
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+                    } header: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "cpu")
+                                .foregroundColor(ApolloPalette.accentStrong)
+                            Text("Technology")
+                        }
+                        .font(.footnote.bold())
+                        .foregroundColor(.white.opacity(0.74))
+                        .textCase(nil)
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle(settings.localized("about_llm_hub"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(settings.localized("done")) { dismiss() }
+                        .foregroundColor(.white)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Terms of Service Screen
+
+struct TermsOfServiceScreen: View {
+    @EnvironmentObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+
+    private let tosSections: [(titleKey: String, bodyKey: String)] = [
+        ("tos_acceptance_title", "tos_acceptance_text"),
+        ("tos_app_description_title", "tos_app_description_text"),
+        ("tos_user_responsibilities_title", "tos_user_responsibilities_text"),
+        ("tos_privacy_data_title", "tos_privacy_data_text"),
+        ("tos_disclaimer_title", "tos_disclaimer_text"),
+        ("tos_limitation_liability_title", "tos_limitation_liability_text"),
+        ("tos_model_usage_title", "tos_model_usage_text"),
+        ("tos_open_source_title", "tos_open_source_text"),
+        ("tos_changes_title", "tos_changes_text"),
+        ("tos_contact_title", "tos_contact_text"),
+    ]
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                ApolloLiquidBackground()
+
+                List {
+                    Section {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(settings.localized("tos_welcome_text"))
+                                .font(.body)
+                                .foregroundColor(.white.opacity(0.85))
+                            Text(settings.localized("tos_last_updated"))
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.45))
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+                    }
+
+                    ForEach(Array(tosSections.enumerated()), id: \.offset) { _, section in
+                        Section {
+                            Text(settings.localized(section.bodyKey))
+                                .font(.body)
+                                .foregroundColor(.white.opacity(0.85))
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+                        } header: {
+                            Text(settings.localized(section.titleKey))
+                                .font(.footnote.bold())
+                                .foregroundColor(.white.opacity(0.74))
+                                .textCase(nil)
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle(settings.localized("terms_of_service"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(settings.localized("done")) { dismiss() }
+                        .foregroundColor(.white)
+                }
+            }
+        }
     }
 }
