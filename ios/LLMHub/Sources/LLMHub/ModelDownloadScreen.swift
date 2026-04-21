@@ -37,7 +37,6 @@ class ModelDownloadViewModel: ObservableObject {
     @Published var downloadStates: [String: DownloadState] = [:]
     @Published var expandedModelId: String? = nil
     @Published var expandedFamilyTitle: String? = nil
-    private let completionThresholdRatio: Double = 0.98
     private let pendingDownloadsKey = "ios_pending_model_download_ids"
 
     private func legacyModelDirectory(for model: AIModel) -> URL? {
@@ -83,6 +82,46 @@ class ModelDownloadViewModel: ObservableObject {
         }
 
         return (allExist, totalLocalBytes)
+    }
+
+    private func verifiedInstallMarkerExists(in directory: URL, for model: AIModel) -> Bool {
+        let markerURL = ModelDownloader.installMarkerURL(for: directory)
+        guard let data = try? Data(contentsOf: markerURL) else { return false }
+
+        struct ModelInstallMarker: Codable {
+            let version: Int
+            let modelId: String
+            let totalBytes: Int64
+            let fileNames: [String]
+        }
+
+        guard let marker = try? JSONDecoder().decode(ModelInstallMarker.self, from: data) else {
+            return false
+        }
+
+        return marker.version == 1
+            && marker.modelId == model.id
+            && marker.fileNames == model.requiredFileNames
+    }
+
+    private func backfillVerifiedInstallMarker(in directory: URL, for model: AIModel, totalBytes: Int64) {
+        struct ModelInstallMarker: Codable {
+            let version: Int
+            let modelId: String
+            let totalBytes: Int64
+            let fileNames: [String]
+        }
+
+        let marker = ModelInstallMarker(
+            version: 1,
+            modelId: model.id,
+            totalBytes: totalBytes,
+            fileNames: model.requiredFileNames
+        )
+
+        guard let data = try? JSONEncoder().encode(marker) else { return }
+        let markerURL = ModelDownloader.installMarkerURL(for: directory)
+        FileManager.default.createFile(atPath: markerURL.path, contents: data)
     }
 
     // MARK: - Imported models persistence
@@ -273,28 +312,59 @@ class ModelDownloadViewModel: ObservableObject {
     }
 
     func refreshStatuses() {
+        let pendingIDs = loadPendingDownloadIDs()
+
         for model in models {
             // Custom imported models manage their own state via loadImportedModels/addExternalModel
             if model.source == "Custom" { continue }
 
             var allExist = false
             var totalLocalBytes: Int64 = 0
+            var hasVerifiedInstallMarker = false
+            var markerDirectory: URL?
 
             if let runAnywhereDir = try? destinationDirectory(for: model),
                FileManager.default.fileExists(atPath: runAnywhereDir.path) {
                 let status = requiredFilesExist(in: runAnywhereDir, for: model)
                 allExist = status.allExist
                 totalLocalBytes = status.totalBytes
+                if allExist {
+                    hasVerifiedInstallMarker = verifiedInstallMarkerExists(in: runAnywhereDir, for: model)
+                    markerDirectory = runAnywhereDir
+                }
             }
 
             if !allExist, let legacyDir = legacyModelDirectory(for: model), FileManager.default.fileExists(atPath: legacyDir.path) {
                 let status = requiredFilesExist(in: legacyDir, for: model)
                 allExist = status.allExist
                 totalLocalBytes = max(totalLocalBytes, status.totalBytes)
+                if allExist {
+                    hasVerifiedInstallMarker = verifiedInstallMarkerExists(in: legacyDir, for: model)
+                    markerDirectory = legacyDir
+                }
             }
             
-            let minimumExpectedBytes = Int64(Double(model.sizeBytes) * completionThresholdRatio)
-            if allExist && totalLocalBytes >= minimumExpectedBytes {
+            // Be conservative after interruption: if a model is still marked pending, force it
+            // back through the downloader's exact per-file verification instead of trusting a
+            // near-complete local byte count.
+            if pendingIDs.contains(model.id) {
+                // If it's currently downloading in this session, don't overwrite.
+                if case .downloading = downloadStates[model.id] {
+                    continue
+                }
+                self.downloadStates[model.id] = totalLocalBytes > 0 ? .paused : .notDownloaded
+                continue
+            }
+
+            // Use the explicit verified install marker written only after full per-file validation.
+            // For legacy installs created before this marker existed, backfill it only on exact
+            // byte matches so near-complete interrupted downloads are never promoted to downloaded.
+            if allExist && !hasVerifiedInstallMarker && totalLocalBytes == model.sizeBytes, let markerDirectory {
+                backfillVerifiedInstallMarker(in: markerDirectory, for: model, totalBytes: totalLocalBytes)
+                hasVerifiedInstallMarker = true
+            }
+
+            if allExist && hasVerifiedInstallMarker {
                 self.downloadStates[model.id] = .downloaded
             } else {
                 // If it's currently downloading in this session, don't overwrite

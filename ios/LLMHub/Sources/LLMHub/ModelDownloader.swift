@@ -27,12 +27,23 @@ public struct DownloadUpdate: Sendable {
     public let speedBytesPerSecond: Double
 }
 
+private struct ModelInstallMarker: Codable {
+    let version: Int
+    let modelId: String
+    let totalBytes: Int64
+    let fileNames: [String]
+}
+
 public actor ModelDownloader {
     public static let shared = ModelDownloader()
     
     private let urlSession: URLSession
     private let completionThresholdRatio: Double = 0.98
     private let optionalModelFiles: Set<String> = []
+
+    nonisolated static func installMarkerURL(for destinationDir: URL) -> URL {
+        destinationDir.appendingPathComponent("_downloaded")
+    }
     
     private init() {
         let config = URLSessionConfiguration.default
@@ -152,6 +163,9 @@ public actor ModelDownloader {
         if !FileManager.default.fileExists(atPath: destinationDir.path) {
             try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
         }
+
+        let markerURL = Self.installMarkerURL(for: destinationDir)
+        try? FileManager.default.removeItem(at: markerURL)
         
         let downloadItems = Array(zip(model.requiredFileNames, model.allDownloadURLs))
 
@@ -340,6 +354,15 @@ public actor ModelDownloader {
             // but by this point each file has already been validated above.
             onProgress(DownloadUpdate(bytesDownloaded: finalBytes, totalBytes: totalSize, speedBytesPerSecond: 0))
         }
+
+        let marker = ModelInstallMarker(
+            version: 1,
+            modelId: model.id,
+            totalBytes: finalBytes,
+            fileNames: model.requiredFileNames
+        )
+        let markerData = try JSONEncoder().encode(marker)
+        FileManager.default.createFile(atPath: markerURL.path, contents: markerData)
     }
 
     // MARK: - CoreML ZIP Download + Extraction

@@ -113,8 +113,8 @@ public enum CppBridge {
         // Step 3: Telemetry manager (builds JSON, calls HTTP callback) — disabled
         // Telemetry.initialize(environment: environment)
 
-        // Step 4: Device registration callbacks
-        Device.register()
+        // Step 4: Device registration callbacks — disabled
+        // Device.register()
 
         lock.lock()
         _isInitialized = true

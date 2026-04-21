@@ -365,17 +365,7 @@ public enum RunAnywhere {
             logger.debug("Model paths base directory set")
         }
 
-        // Step 5: Register device in background. This is explicitly non-critical and
-        // should not delay local model use when the network is unavailable.
-        Task.detached(priority: .utility) {
-            let logger = SDKLogger(category: "RunAnywhere.Services")
-            do {
-                try await CppBridge.Device.registerIfNeeded(environment: environment)
-                logger.debug("Device registration check completed")
-            } catch {
-                logger.warning("Device registration failed (non-critical): \(error.localizedDescription)")
-            }
-        }
+        // Step 5: Device registration — disabled
 
         // Step 6: Discover already-downloaded models on file system
         // This scans the models directory and updates the registry for models found on disk
