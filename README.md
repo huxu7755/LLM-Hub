@@ -1,20 +1,23 @@
 # LLM Hub 🤖
 
-**LLM Hub** is an open-source Android app for on-device LLM chat and image generation. It's optimized for mobile usage (CPU/GPU/NPU acceleration) and supports multiple model formats so you can run powerful models locally and privately.
+**LLM Hub** is an open-source mobile app for on-device LLM chat and image generation, available for both **Android** and **iOS**. It's optimized for mobile usage (CPU/GPU/NPU acceleration) and supports multiple model formats so you can run powerful models locally and privately.
 
-> **🍎 iOS version is coming!** I'm actively working on it and would love to bring LLM Hub to iPhone and iPad. The only thing standing in the way is hardware — I need to save up ~$1,000 for a Mac and an Apple Developer account.
->
-> If you've enjoyed the app and want to help make iOS happen, even a small amount goes a long way 💙
+> **🍎 iOS version is now available!** Run powerful LLMs locally and privately on your iPhone and iPad.
 >
 > [![Sponsor timmyy123](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=github-sponsors&logoColor=white&style=flat)](https://github.com/sponsors/timmyy123)
 >
-> **Early sponsor perk:** The iOS app will be a paid App Store release, but anyone who sponsors before launch gets a free redemption code on me. Just include your GitHub username or email in your sponsor note and I'll make sure you're taken care of when it ships!
+> **Support the project:** Your support helps maintain the app and add new features. Sponsors get a free redemption code for the iOS version (if you haven't bought it yet) and early access to new builds.
 
 ## Download
 
-<a href="https://play.google.com/store/apps/details?id=com.llmhub.llmhub">
-  <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" width="280" />
-</a>
+<div style="display:flex;gap:12px;align-items:center;">
+  <a href="https://play.google.com/store/apps/details?id=com.llmhub.llmhub">
+    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" width="240" />
+  </a>
+  <a href="https://apps.apple.com/au/app/llm-hub/id6762511820">
+    <img src="https://developer.apple.com/app-store/marketing/guidelines/images/badge-download-on-the-app-store.svg" alt="Download on the App Store" width="210" style="margin-bottom: 12px;" />
+  </a>
+</div>
 
 ## 📸 Screenshots
 
@@ -72,7 +75,7 @@ Activate this in Settings under Kid Mode. Set a PIN, and the mode will remain in
 - 16 language interfaces
 
 Quick Start
-1. Download from Google Play or build from source
+1. Download from **Google Play** or the **App Store**, or build from source
 2. Open Settings → Download Models → Download or Import a model
 3. Select a model and start chatting or generating images
 
@@ -100,10 +103,11 @@ Importing models
 - The full model list and download links live in `app/src/.../data/ModelData.kt` (do not exhaustively list variants in the README)
 
 Technology
-- Kotlin + Jetpack Compose (Material 3)
-- LLM Runtime: MediaPipe, LiteRT, Nexa SDK
-- Image Gen: MNN / Qualcomm QNN
-- Quantization: INT4/INT8
+- **Android**: Kotlin + Jetpack Compose (Material 3)
+- **iOS**: Swift + SwiftUI, Run Anywhere SDK, Apple Foundation Model
+- **LLM Runtime**: MediaPipe, LiteRT, Nexa SDK, Llama.cpp (via Run Anywhere)
+- **Image Gen**: MNN / Qualcomm QNN
+- **Quantization**: INT4/INT8/MLX (Apple Foundation Model)
 
 Acknowledgments
 - **Nexa SDK** — GGUF model inference support (credit shown in-app About) ⚡
