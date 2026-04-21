@@ -4,14 +4,8 @@
 
 ## Download
 
-<div style="display:flex;gap:4px;align-items:center;">
-  <a href="https://play.google.com/store/apps/details?id=com.llmhub.llmhub" style="text-decoration:none;">
-    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="60" style="object-fit: contain;" />
-  </a>
-  <a href="https://apps.apple.com/au/app/llm-hub/id6762511820" style="text-decoration:none;">
-    <img src="https://developer.apple.com/app-store/marketing/guidelines/images/badge-download-on-the-app-store.svg" alt="Download on the App Store" height="40" style="object-fit: contain; padding-bottom: 2px;" />
-  </a>
-</div>
+<a href="https://play.google.com/store/apps/details?id=com.llmhub.llmhub"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="80" style="vertical-align: middle;"></a><a href="https://apps.apple.com/au/app/llm-hub/id6762511820"><img src="https://developer.apple.com/app-store/marketing/guidelines/images/badge-download-on-the-app-store.svg" height="54" style="vertical-align: middle; margin-bottom: 12px;"></a>
+
 
 ## 📸 Screenshots
 
