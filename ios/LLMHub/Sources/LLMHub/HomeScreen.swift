@@ -10,6 +10,7 @@ struct FeatureCard {
 }
 
 struct HomeScreen: View {
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject var settings: AppSettings
     var onNavigateToChat: () -> Void
     var onNavigateToModels: () -> Void
@@ -80,14 +81,19 @@ struct HomeScreen: View {
 
                     HStack(spacing: 10) {
                         if let githubStars, githubStars > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "star.fill")
-                                    .font(.caption)
-                                Text("\(githubStars)")
-                                    .font(.subheadline.bold())
+                            Button {
+                                openGithubRepository()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "star.fill")
+                                        .font(.caption)
+                                    Text("\(githubStars)")
+                                        .font(.subheadline.bold())
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
+                            .buttonStyle(.plain)
                         }
 
                         Button {
@@ -182,6 +188,11 @@ struct HomeScreen: View {
         } catch {
             // Keep UI clean if network call fails.
         }
+    }
+
+    private func openGithubRepository() {
+        guard let url = URL(string: "https://github.com/timmyy123/LLM-Hub") else { return }
+        openURL(url)
     }
 }
 

@@ -834,15 +834,10 @@ private final class IOSSpeechTranscriber: NSObject, ObservableObject {
 
     func stopLiveTranscription() async {
         logError("stopLiveTranscription: stopping engine...")
-        let finalTranscript = self.transcript
+        let finalTranscript = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         await engine.stop()
         await MainActor.run {
-            if !finalTranscript.isEmpty {
-                self.history.append(TranscriptionSession(id: UUID(), text: finalTranscript, timestamp: Date()))
-            }
-            self.transcript = ""
-            self.baseTranscript = ""
-            self.previousHypothesis = ""
+            self.finishCurrentTranscription(with: finalTranscript)
             self.isRecording = false
             self.isPreparing = false
         }
@@ -895,12 +890,7 @@ private final class IOSSpeechTranscriber: NSObject, ObservableObject {
                     
                     if isFinal {
                         self.logError("[File] Transcription finished. Moving to history.")
-                        if !self.transcript.isEmpty {
-                            self.history.append(TranscriptionSession(id: UUID(), text: self.transcript, timestamp: Date()))
-                        }
-                        self.transcript = ""
-                        self.sessionHistory = []
-                        self.previousHypothesis = ""
+                        self.finishCurrentTranscription(with: self.transcript)
                         self.isTranscribing = false
                         try? FileManager.default.removeItem(at: tempURL)
                     }
@@ -969,6 +959,18 @@ private final class IOSSpeechTranscriber: NSObject, ObservableObject {
             .joined(separator: " ")
         self.transcript = combined.trimmingCharacters(in: .whitespacesAndNewlines)
         self.logError("[\(prefix)] current transcript length: \(self.transcript.count)")
+    }
+
+    private func finishCurrentTranscription(with text: String) {
+        let finalTranscript = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        transcript = ""
+        baseTranscript = ""
+        previousHypothesis = ""
+        sessionHistory = []
+
+        guard !finalTranscript.isEmpty else { return }
+        history.append(TranscriptionSession(id: UUID(), text: finalTranscript, timestamp: Date()))
     }
 
     private func addTextToHistory(_ text: String) {
