@@ -2,6 +2,9 @@ import CRACommons
 import Darwin
 import Foundation
 
+@_silgen_name("rac_backend_onnx_embeddings_register")
+private func rac_backend_onnx_embeddings_register_direct() -> Int32
+
 // MARK: - EmbeddingService
 // Wraps the RACommons rac_embeddings_service C API to generate
 // float-vector embeddings from text using a GGUF embedding model.
@@ -71,14 +74,7 @@ actor EmbeddingService {
     }
 
     private nonisolated static func registerOnnxEmbeddingsProvider() throws {
-        typealias RegisterFn = @convention(c) () -> Int32
-
-        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "rac_backend_onnx_embeddings_register") else {
-            throw EmbeddingError.initFailed("rac_backend_onnx_embeddings_register symbol not found")
-        }
-
-        let registerFn = unsafeBitCast(symbol, to: RegisterFn.self)
-        let result = registerFn()
+        let result = rac_backend_onnx_embeddings_register_direct()
         if result != RAC_SUCCESS && result != RAC_ERROR_MODULE_ALREADY_REGISTERED {
             throw EmbeddingError.initFailed("rac_backend_onnx_embeddings_register failed: \(result)")
         }
