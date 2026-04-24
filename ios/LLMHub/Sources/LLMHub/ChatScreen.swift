@@ -925,9 +925,8 @@ class ChatViewModel: ObservableObject {
         if defaults.object(forKey: PersistenceKeys.enableAudio) != nil {
             settings.enableAudio = defaults.bool(forKey: PersistenceKeys.enableAudio)
         }
-        if defaults.object(forKey: PersistenceKeys.enableThinking) != nil {
-            settings.enableThinking = defaults.bool(forKey: PersistenceKeys.enableThinking)
-        }
+        // Thinking is always enabled for thinking-capable models — no toggle.
+        settings.enableThinking = true
         if let sp = defaults.string(forKey: PersistenceKeys.systemPrompt) {
             settings.systemPrompt = sp
         }

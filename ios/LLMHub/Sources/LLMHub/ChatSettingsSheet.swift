@@ -163,9 +163,6 @@ struct ChatSettingsSheet: View {
                                 if model.supportsAudio {
                                     ToggleTile(title: settings.localized("enable_audio"), isOn: $vm.enableAudio, icon: "mic.fill")
                                 }
-                                if model.supportsThinking {
-                                    ToggleTile(title: settings.localized("enable_thinking"), isOn: $vm.enableThinking, icon: "brain")
-                                }
                             }
                             .padding()
                             .background(.ultraThinMaterial)
