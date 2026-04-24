@@ -2288,7 +2288,9 @@ private struct SelectableMarkdownText: UIViewRepresentable {
         tv.backgroundColor = .clear
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
-        tv.dataDetectorTypes = [.link]
+        // Do NOT use dataDetectorTypes — it re-runs detection on every
+        // attributedText update during streaming, causing links to blink.
+        tv.dataDetectorTypes = []
         tv.linkTextAttributes = [
             .foregroundColor: UIColor(red: 0.54, green: 0.71, blue: 0.97, alpha: 1.0) // #8ab4f8
         ]
@@ -2485,6 +2487,19 @@ private struct SelectableMarkdownText: UIViewRepresentable {
             result.addAttribute(.backgroundColor, value: UIColor.white.withAlphaComponent(0.1), range: codeRange)
             let codeText = afterItalic.substring(with: codeRange)
             result.replaceCharacters(in: range, with: codeText)
+        }
+
+        // URLs: use NSDataDetector (same engine as dataDetectorTypes) to find links
+        // and bake them into the attributed string. This avoids the blink caused by
+        // dataDetectorTypes re-running detection on every UITextView update.
+        let afterCode = result.string as NSString
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let linkMatches = detector.matches(in: afterCode as String, options: [], range: NSRange(location: 0, length: afterCode.length))
+            for linkMatch in linkMatches {
+                if let url = linkMatch.url {
+                    result.addAttribute(.link, value: url, range: linkMatch.range)
+                }
+            }
         }
 
         return result
