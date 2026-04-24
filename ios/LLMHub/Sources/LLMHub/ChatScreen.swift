@@ -4,6 +4,7 @@ import PhotosUI
 import RunAnywhere
 import Speech
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 import WebKit
 #if canImport(FoundationModels)
@@ -1543,7 +1544,7 @@ class ChatViewModel: ObservableObject {
         let modelName = selectedModelName.lowercased()
         let modelSupportsThinking = chatModel(named: selectedModelName)?.supportsThinking == true
         let isGemma  = modelName.contains("gemma")
-        let isGemma4 = isGemma && (modelName.contains("gemma 4 ") || modelName.contains("gemma-4 ") || modelName.hasSuffix("gemma 4") || modelName.hasSuffix("gemma-4"))
+        let isGemma4 = isGemma && (modelName.contains("gemma 4e ") || modelName.contains("gemma-4e ") || modelName.hasSuffix("gemma 4e") || modelName.hasSuffix("gemma-4e"))
         let isLlama  = modelName.contains("llama") || modelName.contains("mistral")
         let isHarmonyModel = modelName.contains("gpt-oss") || modelName.contains("gpt_oss")
 
@@ -1859,9 +1860,11 @@ struct MessageBubble: View {
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
-                        .onLongPressGesture {
-                            showActions = true
-                        }
+                        // No long-press gesture here: `.textSelection(.enabled)`
+                        // inside the markdown renderer provides the native
+                        // long-press-to-select-partial-text-and-copy UX.
+                        // Full-copy/edit/regenerate buttons live in the action
+                        // row below the bubble.
                     }
                 }
             }
@@ -2068,7 +2071,7 @@ struct RenderMessageSegments: View {
                             .cornerRadius(10)
                     } else {
                         MathView(equation: content, isBlock: false)
-                            .frame(width: 100, height: 30) // Inline math is tricky with WebView height
+                            .frame(minWidth: 40, maxWidth: .infinity, minHeight: 28, maxHeight: 44)
                     }
                 case .table(let content):
                     MarkdownTableView(rawTable: content)
@@ -2261,29 +2264,240 @@ private struct MarkdownMessageText: View {
     let text: String
 
     var body: some View {
-        let normalizedText = text.replacingOccurrences(of: "\\n", with: "\n")
-        
-        // Use full markdown parsing for each block of text to keep layout consistent
-        if let attributed = try? AttributedString(
-            markdown: normalizedText,
-            options: .init(
-                interpretedSyntax: .full,
-                failurePolicy: .returnPartiallyParsedIfPossible
-            )
-        ) {
-            Text(attributed)
-                .font(.body)
-                .lineSpacing(4)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-        } else {
-            Text(normalizedText)
-                .font(.body)
-                .lineSpacing(4)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+        let normalizedText = text
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\r\n", with: "\n")
+
+        SelectableMarkdownText(text: normalizedText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Selectable Markdown UITextView Wrapper
+
+/// A `UITextView`-backed view that renders markdown as `NSAttributedString`.
+/// This gives native long-press-to-select with highlight handles and copy menu,
+/// exactly like ChatGPT / Gemini iOS apps.
+private struct SelectableMarkdownText: UIViewRepresentable {
+    let text: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView()
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.isScrollEnabled = false
+        tv.backgroundColor = .clear
+        tv.textContainerInset = .zero
+        tv.textContainer.lineFragmentPadding = 0
+        tv.dataDetectorTypes = [.link]
+        tv.linkTextAttributes = [
+            .foregroundColor: UIColor(red: 0.54, green: 0.71, blue: 0.97, alpha: 1.0) // #8ab4f8
+        ]
+        // Prevent the text view from absorbing scroll events
+        tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        tv.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        return tv
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        let attributed = markdownToAttributedString(text)
+        // Only update if content changed to avoid resetting selection
+        if uiView.attributedText.string != attributed.string {
+            uiView.attributedText = attributed
+        }
+        uiView.invalidateIntrinsicContentSize()
+    }
+
+    @MainActor
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? UIScreen.main.bounds.width
+        let size = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: size.height)
+    }
+
+    // MARK: - Markdown → NSAttributedString
+
+    private func markdownToAttributedString(_ markdown: String) -> NSAttributedString {
+        let baseFont = UIFont.preferredFont(forTextStyle: .body)
+        let baseFontSize = baseFont.pointSize
+        let white = UIColor.white
+        let dimWhite = UIColor.white.withAlphaComponent(0.7)
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 4
+        paragraphStyle.paragraphSpacing = 8
+
+        let result = NSMutableAttributedString()
+        let lines = markdown.components(separatedBy: "\n")
+        var i = 0
+
+        while i < lines.count {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            // Heading detection
+            if let headingMatch = trimmed.range(of: #"^(#{1,3})\s+"#, options: .regularExpression) {
+                let level = trimmed[headingMatch].filter { $0 == "#" }.count
+                let headingText = String(trimmed[headingMatch.upperBound...])
+                let fontSize: CGFloat = level == 1 ? baseFontSize * 1.4 : level == 2 ? baseFontSize * 1.2 : baseFontSize * 1.1
+                let headingFont = UIFont.boldSystemFont(ofSize: fontSize)
+                let headingPara = NSMutableParagraphStyle()
+                headingPara.paragraphSpacingBefore = 12
+                headingPara.paragraphSpacing = 6
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: headingFont,
+                    .foregroundColor: white,
+                    .paragraphStyle: headingPara
+                ]
+                if result.length > 0 { result.append(NSAttributedString(string: "\n")) }
+                result.append(NSAttributedString(string: headingText, attributes: attrs))
+                i += 1
+                continue
+            }
+
+            // Numbered list item: "1. ", "2. ", etc.
+            if let listMatch = trimmed.range(of: #"^(\d+)\.\s+"#, options: .regularExpression) {
+                let number = String(trimmed[trimmed.startIndex..<listMatch.upperBound]).trimmingCharacters(in: .whitespaces)
+                let itemText = String(trimmed[listMatch.upperBound...])
+                let listPara = NSMutableParagraphStyle()
+                listPara.lineSpacing = 4
+                listPara.paragraphSpacing = 4
+                listPara.headIndent = 24
+                listPara.firstLineHeadIndent = 4
+                let tabStop = NSTextTab(textAlignment: .left, location: 24)
+                listPara.tabStops = [tabStop]
+                if result.length > 0 { result.append(NSAttributedString(string: "\n")) }
+                let prefix = NSAttributedString(string: "\(number)\t", attributes: [
+                    .font: baseFont,
+                    .foregroundColor: white,
+                    .paragraphStyle: listPara
+                ])
+                result.append(prefix)
+                result.append(applyInlineFormatting(itemText, font: baseFont, color: white, paragraphStyle: listPara))
+                i += 1
+                continue
+            }
+
+            // Bullet list item: "- ", "* ", "• "
+            if let bulletMatch = trimmed.range(of: #"^[-*•]\s+"#, options: .regularExpression) {
+                let itemText = String(trimmed[bulletMatch.upperBound...])
+                let listPara = NSMutableParagraphStyle()
+                listPara.lineSpacing = 4
+                listPara.paragraphSpacing = 4
+                listPara.headIndent = 24
+                listPara.firstLineHeadIndent = 4
+                let tabStop = NSTextTab(textAlignment: .left, location: 24)
+                listPara.tabStops = [tabStop]
+                if result.length > 0 { result.append(NSAttributedString(string: "\n")) }
+                let bullet = NSAttributedString(string: "•\t", attributes: [
+                    .font: baseFont,
+                    .foregroundColor: white,
+                    .paragraphStyle: listPara
+                ])
+                result.append(bullet)
+                result.append(applyInlineFormatting(itemText, font: baseFont, color: white, paragraphStyle: listPara))
+                i += 1
+                continue
+            }
+
+            // Blockquote
+            if trimmed.hasPrefix(">") {
+                let quoteText = String(trimmed.dropFirst().trimmingCharacters(in: .whitespaces))
+                let quotePara = NSMutableParagraphStyle()
+                quotePara.lineSpacing = 4
+                quotePara.paragraphSpacing = 6
+                quotePara.firstLineHeadIndent = 16
+                quotePara.headIndent = 16
+                let quoteFont = UIFont.italicSystemFont(ofSize: baseFontSize)
+                if result.length > 0 { result.append(NSAttributedString(string: "\n")) }
+                result.append(NSAttributedString(string: quoteText, attributes: [
+                    .font: quoteFont,
+                    .foregroundColor: dimWhite,
+                    .paragraphStyle: quotePara
+                ]))
+                i += 1
+                continue
+            }
+
+            // Empty line = paragraph break
+            if trimmed.isEmpty {
+                result.append(NSAttributedString(string: "\n", attributes: [
+                    .font: baseFont,
+                    .paragraphStyle: paragraphStyle
+                ]))
+                i += 1
+                continue
+            }
+
+            // Regular paragraph text
+            if result.length > 0 {
+                // Add newline between paragraphs for non-empty content
+                let lastChar = (result.string as NSString).substring(from: max(0, result.length - 1))
+                if lastChar != "\n" {
+                    result.append(NSAttributedString(string: "\n"))
+                }
+            }
+            result.append(applyInlineFormatting(trimmed, font: baseFont, color: white, paragraphStyle: paragraphStyle))
+            i += 1
+        }
+
+        return result
+    }
+
+    /// Apply bold, italic, inline code, and link formatting within a line.
+    private func applyInlineFormatting(_ text: String, font: UIFont, color: UIColor, paragraphStyle: NSParagraphStyle) -> NSAttributedString {
+        let result = NSMutableAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraphStyle
+        ])
+        let nsText = text as NSString
+
+        // Bold: **text** or __text__
+        applyRegex(#"\*\*(.+?)\*\*|__(.+?)__"#, to: result, nsText: nsText) { range, match in
+            let captureRange = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2)
+            let boldFont = UIFont.boldSystemFont(ofSize: font.pointSize)
+            result.addAttribute(.font, value: boldFont, range: captureRange)
+            // Remove markers
+            let boldText = nsText.substring(with: captureRange)
+            result.replaceCharacters(in: range, with: boldText)
+        }
+
+        // Re-fetch string after bold replacements
+        let afterBold = result.string as NSString
+
+        // Italic: *text* or _text_ (not inside bold)
+        applyRegex(#"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)"#, to: result, nsText: afterBold) { range, match in
+            let captureRange = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2)
+            let italicFont = UIFont.italicSystemFont(ofSize: font.pointSize)
+            result.addAttribute(.font, value: italicFont, range: captureRange)
+            let italicText = afterBold.substring(with: captureRange)
+            result.replaceCharacters(in: range, with: italicText)
+        }
+
+        // Inline code: `text`
+        let afterItalic = result.string as NSString
+        applyRegex(#"`([^`]+)`"#, to: result, nsText: afterItalic) { range, match in
+            let codeRange = match.range(at: 1)
+            let codeFont = UIFont.monospacedSystemFont(ofSize: font.pointSize * 0.9, weight: .regular)
+            let codeColor = UIColor(red: 0.79, green: 0.82, blue: 0.85, alpha: 1.0) // #c9d1d9
+            result.addAttribute(.font, value: codeFont, range: codeRange)
+            result.addAttribute(.foregroundColor, value: codeColor, range: codeRange)
+            result.addAttribute(.backgroundColor, value: UIColor.white.withAlphaComponent(0.1), range: codeRange)
+            let codeText = afterItalic.substring(with: codeRange)
+            result.replaceCharacters(in: range, with: codeText)
+        }
+
+        return result
+    }
+
+    /// Helper: apply regex replacements in reverse order to preserve indices.
+    private func applyRegex(_ pattern: String, to attrStr: NSMutableAttributedString, nsText: NSString, handler: (NSRange, NSTextCheckingResult) -> Void) {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return }
+        let matches = regex.matches(in: nsText as String, options: [], range: NSRange(location: 0, length: nsText.length))
+        // Process in reverse to keep ranges valid
+        for match in matches.reversed() {
+            handler(match.range, match)
         }
     }
 }
@@ -2576,16 +2790,10 @@ struct ChatScreen: View {
                     }
                 }
                 .onChange(of: vm.messages.last?.content ?? "") { _, newContent in
-                    // Throttle scroll-to-bottom during streaming — firing on every
-                    // token causes excessive layout work and can destabilize the
-                    // ScrollView when messages are near the context-window limit.
+                    // Scroll to bottom during streaming — debounce to every ~200ms
+                    // to avoid overwhelming layout but still keep up with output.
                     guard vm.isGenerating, let last = vm.messages.last else { return }
-                    let shouldScroll = newContent.count < 80
-                        || newContent.count % 32 == 0
-                        || newContent.hasSuffix("\n")
-                    if shouldScroll {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+                    proxy.scrollTo(last.id, anchor: .bottom)
                 }
                 .onChange(of: isComposerFocused) { _, focused in
                     if focused, let last = vm.messages.last {
@@ -2684,7 +2892,13 @@ struct ChatScreen: View {
                     }
                     .disabled(vm.isGenerating)
                     .confirmationDialog("", isPresented: $showAttachMenu) {
-                        Button(settings.localized("images"))    { showPhotosPicker = true }
+                        let attachSelectedModel = chatModel(named: vm.selectedModelName)
+                        let attachCanVision = vm.enableVision
+                            && (attachSelectedModel?.supportsVision == true)
+                            && (attachSelectedModel.map { LLMBackend.shared.isVisionProjectorAvailable(for: $0) } ?? false)
+                        if attachCanVision {
+                            Button(settings.localized("images"))    { showPhotosPicker = true }
+                        }
                         Button(settings.localized("documents")) { showDocumentImporter = true }
                         Button(settings.localized("audio_file")){ showAudioTranscribeImporter = true }
                         Button(settings.localized("cancel"), role: .cancel) {}

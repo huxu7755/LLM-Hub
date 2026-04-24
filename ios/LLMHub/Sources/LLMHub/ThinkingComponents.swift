@@ -271,24 +271,12 @@ struct ThinkingAwareResultContent: View {
             }
 
             if hasAnswer {
-                if useChatRenderer {
-                    RenderMessageSegments(displayContent: answer)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Text(answer)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                RenderMessageSegments(displayContent: answer)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else if !isInThinkingMode {
                 // No thinking block at all — render content directly
-                if useChatRenderer {
-                    RenderMessageSegments(displayContent: content)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Text(content)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                RenderMessageSegments(displayContent: content)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             // When isInThinkingMode && !hasAnswer: the drawer shows "AI is thinking…"
             // nothing else to render yet — no raw tags leak into the UI.

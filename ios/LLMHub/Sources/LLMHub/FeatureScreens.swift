@@ -2198,31 +2198,39 @@ struct WritingAidScreen: View {
                     )
                     .padding(.horizontal)
 
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(settings.localized("writing_aid_result"))
-                                .font(.headline)
-                            if outputText.isEmpty {
-                                Text("-")
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                    ScrollViewReader { scrollProxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(settings.localized("writing_aid_result"))
+                                    .font(.headline)
+                                if outputText.isEmpty {
+                                    Text("-")
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(10)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                } else {
+                                    ThinkingAwareResultContent(
+                                        content: outputText,
+                                        isGenerating: isProcessing,
+                                        preferThinkingWhileStreaming: enableThinking
+                                            && (selectedFeatureModel(named: selectedModelName)?.supportsThinking == true)
+                                            && supportsUnmarkedStreamingThinkingHeuristic(forModelNamed: selectedModelName)
+                                    )
                                     .padding(10)
                                     .background(.ultraThinMaterial)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                            } else {
-                                ThinkingAwareResultContent(
-                                    content: outputText,
-                                    isGenerating: isProcessing,
-                                    preferThinkingWhileStreaming: enableThinking
-                                        && (selectedFeatureModel(named: selectedModelName)?.supportsThinking == true)
-                                        && supportsUnmarkedStreamingThinkingHeuristic(forModelNamed: selectedModelName)
-                                )
-                                .padding(10)
-                                .background(.ultraThinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+                                Color.clear.frame(height: 1).id("writing_aid_bottom")
+                            }
+                            .padding(.horizontal)
+                        }
+                        .onChange(of: outputText) { _, _ in
+                            if isProcessing {
+                                withAnimation { scrollProxy.scrollTo("writing_aid_bottom", anchor: .bottom) }
                             }
                         }
-                        .padding(.horizontal)
                     }
 
                     if let errorMessage {
@@ -2702,49 +2710,66 @@ struct TranslatorScreen: View {
             )
             .padding(.horizontal)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(settings.localized("translator_result"))
-                        .font(.headline)
-                    Text(outputText.isEmpty ? "-" : outputText)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(minHeight: 140, alignment: .topLeading)
-                        .padding(10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    HStack(spacing: 8) {
-                        Spacer()
-
-                        Button {
-                            ttsManager.toggleSpeaking(
-                                outputText,
-                                fallbackLanguage: settings.selectedLanguage,
-                                key: "translator-output"
-                            )
-                        } label: {
-                            Image(systemName: ttsManager.isSpeaking(key: "translator-output") ? "stop.fill" : "speaker.wave.2")
-                                .font(.system(size: 18, weight: .semibold))
-                                .frame(width: 44, height: 44)
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(settings.localized("translator_result"))
+                            .font(.headline)
+                        if outputText.isEmpty {
+                            Text("-")
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(minHeight: 140, alignment: .topLeading)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        } else {
+                            RenderMessageSegments(displayContent: outputText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(minHeight: 140, alignment: .topLeading)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
-                        .featureActionIconButtonStyle()
-                        .disabled(outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Color.clear.frame(height: 1).id("translator_bottom")
 
-                        Button {
-                            #if canImport(UIKit)
-                            UIPasteboard.general.string = outputText
-                            #endif
-                        } label: {
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 18, weight: .semibold))
-                                .frame(width: 44, height: 44)
+                        HStack(spacing: 8) {
+                            Spacer()
+
+                            Button {
+                                ttsManager.toggleSpeaking(
+                                    outputText,
+                                    fallbackLanguage: settings.selectedLanguage,
+                                    key: "translator-output"
+                                )
+                            } label: {
+                                Image(systemName: ttsManager.isSpeaking(key: "translator-output") ? "stop.fill" : "speaker.wave.2")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .frame(width: 44, height: 44)
+                            }
+                            .featureActionIconButtonStyle()
+                            .disabled(outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                            Button {
+                                #if canImport(UIKit)
+                                UIPasteboard.general.string = outputText
+                                #endif
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .frame(width: 44, height: 44)
                         }
                         .featureActionIconButtonStyle()
                         .disabled(outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
+                    }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
+                .onChange(of: outputText) { _, _ in
+                    if isTranslating {
+                        withAnimation { scrollProxy.scrollTo("translator_bottom", anchor: .bottom) }
+                    }
+                }
             }
 
             if let errorMessage {
@@ -3175,33 +3200,58 @@ struct ScamDetectorScreen: View {
                         .padding(.horizontal)
                     }
 
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(settings.localized("scam_detector_result"))
-                                .font(.headline)
-                            if outputText.isEmpty {
-                                Text("-")
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                    ScrollViewReader { scrollProxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(settings.localized("scam_detector_result"))
+                                    .font(.headline)
+                                if outputText.isEmpty {
+                                    Text("-")
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .frame(minHeight: 140, alignment: .topLeading)
+                                        .padding(10)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                } else {
+                                    ThinkingAwareResultContent(
+                                        content: outputText,
+                                        isGenerating: isAnalyzing,
+                                        preferThinkingWhileStreaming: enableThinking
+                                            && (selectedFeatureModel(named: selectedModelName)?.supportsThinking == true)
+                                            && supportsUnmarkedStreamingThinkingHeuristic(forModelNamed: selectedModelName)
+                                    )
                                     .frame(minHeight: 140, alignment: .topLeading)
                                     .padding(10)
                                     .background(.ultraThinMaterial)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                            } else {
-                                ThinkingAwareResultContent(
-                                    content: outputText,
-                                    isGenerating: isAnalyzing,
-                                    preferThinkingWhileStreaming: enableThinking
-                                        && (selectedFeatureModel(named: selectedModelName)?.supportsThinking == true)
-                                        && supportsUnmarkedStreamingThinkingHeuristic(forModelNamed: selectedModelName)
-                                )
-                                .frame(minHeight: 140, alignment: .topLeading)
-                                .padding(10)
-                                .background(.ultraThinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+                                if !outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    HStack {
+                                        Spacer()
+                                        Button {
+                                            #if canImport(UIKit)
+                                            UIPasteboard.general.string = getDisplayContentWithoutThinking(outputText)
+                                            #endif
+                                        } label: {
+                                            Image(systemName: "doc.on.doc")
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundColor(.white.opacity(0.6))
+                                                .padding(8)
+                                                .background(Color.white.opacity(0.08))
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        }
+                                    }
+                                }
+                                Color.clear.frame(height: 1).id("scam_detector_bottom")
+                            }
+                            .padding(.horizontal)
+                        }
+                        .onChange(of: outputText) { _, _ in
+                            if isAnalyzing {
+                                withAnimation { scrollProxy.scrollTo("scam_detector_bottom", anchor: .bottom) }
                             }
                         }
-                        .padding(.horizontal)
                     }
 
                     if let errorMessage {
