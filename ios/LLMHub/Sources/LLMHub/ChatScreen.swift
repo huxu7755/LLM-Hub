@@ -388,7 +388,7 @@ private func chatAppleFoundationModelIfAvailable() -> AIModel? {
             source: "Apple",
             supportsVision: false,
             supportsAudio: false,
-            supportsThinking: true,
+            supportsThinking: false,
             supportsGpu: true,
             requirements: ModelRequirements(minRamGB: 8, recommendedRamGB: 8),
             contextWindowSize: max(4096, model.contextSize),

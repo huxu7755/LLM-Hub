@@ -330,7 +330,7 @@ private func appleFoundationModelIfAvailable() -> AIModel? {
             source: "Apple",
             supportsVision: false,
             supportsAudio: false,
-            supportsThinking: true,
+            supportsThinking: false,
             supportsGpu: true,
             requirements: ModelRequirements(minRamGB: 8, recommendedRamGB: 8),
             contextWindowSize: max(1, model.contextSize),
