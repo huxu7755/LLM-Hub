@@ -84,7 +84,7 @@ struct ChatSettingsSheet: View {
                             }
                             .padding(.bottom, 8)
                             
-                            ConfigSlider(title: settings.localized("context_window_size"), value: $draftContextWindow, range: 1...modelMaxContextWindow, format: "%.0f", subtitle: "max \(Int(modelMaxContextWindow))", step: contextWindowStep, onCommit: applyDraftToViewModel)
+                            ConfigSlider(title: settings.localized("context_window_size"), value: $draftContextWindow, range: 1...modelMaxContextWindow, format: "%.0f", subtitle: "max \(Int(modelMaxContextWindow))", step: 1, onCommit: applyDraftToViewModel)
                             ConfigSlider(title: settings.localized("top_k"), value: $draftTopK, range: 1...256, format: "%.0f", onCommit: applyDraftToViewModel)
                             ConfigSlider(title: settings.localized("top_p"), value: $draftTopP, range: 0...1, format: "%.2f", onCommit: applyDraftToViewModel)
                             ConfigSlider(title: settings.localized("temperature"), value: $draftTemperature, range: 0...2, format: "%.2f", onCommit: applyDraftToViewModel)
@@ -289,7 +289,8 @@ struct ChatSettingsSheet: View {
 
     private var contextWindowStep: Double {
         let maxWindow = max(1, Int(modelMaxContextWindow))
-        return Double(max(1, maxWindow / 1024))
+        let raw = max(1, maxWindow / 1024)
+        return Double(raw)
     }
 
     private func syncDraftFromViewModel() {
@@ -394,6 +395,11 @@ struct ConfigSlider: View {
                 if let step {
                     Slider(value: $value, in: range, step: step) { editing in
                         if !editing {
+                            // Snap to max if within one step — fixes slider not reaching max
+                            // due to step not dividing evenly from lower bound
+                            if value >= range.upperBound - step {
+                                value = range.upperBound
+                            }
                             onCommit()
                         }
                     }
