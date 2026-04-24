@@ -251,9 +251,26 @@ rac_handle_t llamacpp_create_service(const rac_service_request_t* request, void*
 
     RAC_LOG_INFO(LOG_CAT, "Creating LlamaCPP service for: %s", model_path);
 
+    // Parse config_json from the service request to extract context_size.
+    // This is forwarded from the model registry's context_length field.
+    rac_llm_llamacpp_config_t llamacpp_config = RAC_LLM_LLAMACPP_CONFIG_DEFAULT;
+    const rac_llm_llamacpp_config_t* config_ptr = nullptr;
+    if (request->config_json && request->config_json[0] != '\0') {
+        const char* ctx_key = "\"context_size\":";
+        const char* ctx_pos = strstr(request->config_json, ctx_key);
+        if (ctx_pos) {
+            int ctx_val = atoi(ctx_pos + strlen(ctx_key));
+            if (ctx_val > 0) {
+                llamacpp_config.context_size = ctx_val;
+                config_ptr = &llamacpp_config;
+                RAC_LOG_INFO(LOG_CAT, "Using context_size=%d from config_json", ctx_val);
+            }
+        }
+    }
+
     // Create backend-specific handle
     rac_handle_t backend_handle = nullptr;
-    rac_result_t result = rac_llm_llamacpp_create(model_path, nullptr, &backend_handle);
+    rac_result_t result = rac_llm_llamacpp_create(model_path, config_ptr, &backend_handle);
     if (result != RAC_SUCCESS) {
         RAC_LOG_ERROR(LOG_CAT, "Failed to create LlamaCPP backend: %d", result);
         return nullptr;

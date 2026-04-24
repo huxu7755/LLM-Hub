@@ -682,6 +682,7 @@ class LLMBackend: ObservableObject {
                 framework: framework(for: model),
                 modality: model.supportsVision ? .multimodal : .language,
                 memoryRequirement: model.sizeBytes,
+                contextLength: contextLength,
                 supportsThinking: model.supportsThinking
             )
             return
@@ -906,6 +907,8 @@ class LLMBackend: ObservableObject {
             streamingEnabled: true,
             systemPrompt: effectiveSystemPrompt
         )
+
+        do {
 
         if let imageURL,
            enableVision,
@@ -1153,6 +1156,13 @@ class LLMBackend: ObservableObject {
                 "🧠 [ThinkingDebug][final] raw-only rawChars=\(currentOutput.count) responseChars=\(result.text.count) thinkingChars=\(result.thinkingContent?.count ?? 0) tokens=\(result.tokensUsed) responseTokens=\(result.responseTokens ?? result.tokensUsed) streamHasMarkers=\(streamHasThinkingMarkers) rawPreview=\(String(currentOutput.prefix(120)))"
             )
             onUpdate(normalizedFinalOutput.0, result.responseTokens ?? result.tokensUsed, result.tokensPerSecond)
+        }
+        } catch {
+            let isRawPrompt = prompt.hasPrefix("__RAW_PROMPT__")
+            print(
+                "❌ [LLMBackend] generate failed model=\(loadedModelName) maxTokens=\(effectiveMaxTokens) contextWindow=\(loadedContextWindow ?? contextWindow) promptChars=\(usePrompt.count) rawPrompt=\(isRawPrompt) error=\(error)"
+            )
+            throw error
         }
     }
 }

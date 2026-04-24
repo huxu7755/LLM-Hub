@@ -73,9 +73,21 @@ rac_result_t rac_llm_create(const char* model_id, rac_handle_t* out_handle) {
     request.framework = framework;
     request.model_path = model_path;
 
-    RAC_LOG_INFO(LOG_CAT, "Service request: framework=%d, model_path=%s",
+    // Forward context_length from registry so the backend can set n_ctx correctly.
+    // Without this, llamacpp defaults to max_default_context_ = 1024.
+    char config_json_buf[128] = {0};
+    if (model_info && model_info->context_length > 0) {
+        snprintf(config_json_buf, sizeof(config_json_buf),
+                 "{\"context_size\":%d}", (int)model_info->context_length);
+        request.config_json = config_json_buf;
+        RAC_LOG_INFO(LOG_CAT, "Forwarding context_length=%d from registry",
+                     (int)model_info->context_length);
+    }
+
+    RAC_LOG_INFO(LOG_CAT, "Service request: framework=%d, model_path=%s, config_json=%s",
                  static_cast<int>(request.framework),
-                 request.model_path ? request.model_path : "NULL");
+                 request.model_path ? request.model_path : "NULL",
+                 request.config_json ? request.config_json : "NULL");
 
     // Service registry returns an rac_llm_service_t* with vtable already set
     result = rac_service_create(RAC_CAPABILITY_TEXT_GENERATION, &request, out_handle);

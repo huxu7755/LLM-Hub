@@ -1842,8 +1842,15 @@ private struct IOS17VibeVoiceScreen: View {
         conversationHistory.append((role: "user", content: text))
 
         // 2. Context Management (Sliding Window)
-        // Keep approx 10k chars of history for voice chat (~2.5k tokens).
-        let maxHistoryChars = 10000
+        // Same smarter budget as AI Chat: reserve min(maxTokens, ctx/4) for response
+        // so history keeps room for prior assistant turns. Reserving the full
+        // maxTokens cap starves history and makes the model "forget" its own replies.
+        let effectiveCtxTokens = llm.loadedContextWindow ?? 2048
+        let reservedForResponse = max(256, min(Int(maxTokens), effectiveCtxTokens / 4))
+        let reservedForCurrent = max(32, text.count / 3) + 64
+        let reservedSafety = 128
+        let availableHistoryTokens = max(128, effectiveCtxTokens - reservedForResponse - reservedForCurrent - reservedSafety)
+        let maxHistoryChars = availableHistoryTokens * 3
         var currentChars = 0
         var truncatedHistory: [(role: String, content: String)] = []
         for msg in conversationHistory.reversed() {
@@ -4737,8 +4744,13 @@ struct VibeCoderScreen: View {
         let history = allMessages.count >= 2 ? Array(allMessages.dropLast(2)) : []
         
         // 2. Context Management (Sliding Window)
-        // Code-heavy prompts are larger, so we keep up to 10k chars of history (~2.5k tokens).
-        let maxHistoryChars = 10000
+        // Same smarter budget as AI Chat. See ChatScreen.buildMultiTurnPrompt.
+        let effectiveCtxTokens = llm.loadedContextWindow ?? 4096
+        let reservedForResponse = max(256, min(Int(maxTokens), effectiveCtxTokens / 4))
+        let reservedForCurrent = max(64, currentFilePrompt.count / 3) + 64
+        let reservedSafety = 128
+        let availableHistoryTokens = max(128, effectiveCtxTokens - reservedForResponse - reservedForCurrent - reservedSafety)
+        let maxHistoryChars = availableHistoryTokens * 3
         var currentChars = 0
         var truncatedHistory: [VibeChatMessage] = []
         for msg in history.reversed() {

@@ -48,14 +48,13 @@ fi
 
 REPO="timmyy123/LLM-Hub"
 SDK_VERSION="0.19.7"
-RELEASE_TAG="${RELEASE_TAG_OVERRIDE:-ios-sdk-v${SDK_VERSION}-patched-v5}"
-RELEASE_TITLE="iOS SDK v${SDK_VERSION} (patched v5)"
+RELEASE_TAG="${RELEASE_TAG_OVERRIDE:-ios-sdk-v${SDK_VERSION}-patched-v6}"
+RELEASE_TITLE="iOS SDK v${SDK_VERSION} (patched v6)"
 RELEASE_NOTES="Patched RunAnywhere SDK v${SDK_VERSION}:
-- MAX_BATCH_SIZE = 2048 (was 4096) — fixes OOM on Gemma 4B (Q2_K) / 3.9B models
-- MAX_UBATCH_SIZE = 512
-- n_ctx still 4096, but Metal allocates ~2049 MiB instead of 4097 MiB
+- FIX: context_size forwarded from model registry → rac_llm_service.cpp → llamacpp_create_service (fixes n_ctx stuck at 1024)
+- FIX: Gemma 4 chat prompt format (<|turn>...<turn|>) in ChatScreen multi-turn builder
+- MAX_BATCH_SIZE = 2048, MAX_UBATCH_SIZE = 512
 - Gemma 4 VLM prompt and stop-token fixes
-- context_length from model registry now forwarded to rac_llm_llamacpp_create (fixes n_ctx=1024 bug)
 - Built from ios/runanywhere-sdks-latest local source
 
 To use, set ios/runanywhere-sdks-latest/Package.swift useLocalBinaries = false

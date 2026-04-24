@@ -566,7 +566,16 @@ class ChatViewModel: ObservableObject {
     )
 
     @Published var inputText: String = ""
-    @Published var isGenerating: Bool = false
+    @Published var isGenerating: Bool = false {
+        didSet {
+            // When generation ends, flush the streamed content to disk. We skip
+            // saves during streaming to avoid JSON encode storms that can make
+            // SwiftUI's LazyVStack render blank briefly on big chats.
+            if oldValue == true && isGenerating == false {
+                chatStore.saveSessions()
+            }
+        }
+    }
     @Published var tokensPerSecond: Double = 0
     @Published var totalTokens: Int = 0
     @Published var selectedModelName: String = AppSettings.shared.localized("no_model_selected") {
@@ -707,7 +716,13 @@ class ChatViewModel: ObservableObject {
         set {
             if let index = chatStore.chatSessions.firstIndex(where: { $0.id == currentSessionId }) {
                 chatStore.chatSessions[index].messages = newValue
-                chatStore.saveSessions()
+                // Skip disk writes during streaming - they fire on every token and
+                // the rapid JSON encode + publish storm causes the LazyVStack to
+                // briefly render nothing when messages are large. We save once
+                // when generation finishes (finishGeneratingMessage / stopGeneration).
+                if !isGenerating {
+                    chatStore.saveSessions()
+                }
                 objectWillChange.send()
             }
         }
@@ -1528,6 +1543,7 @@ class ChatViewModel: ObservableObject {
         let modelName = selectedModelName.lowercased()
         let modelSupportsThinking = chatModel(named: selectedModelName)?.supportsThinking == true
         let isGemma  = modelName.contains("gemma")
+        let isGemma4 = isGemma && (modelName.contains("gemma 4 ") || modelName.contains("gemma-4 ") || modelName.hasSuffix("gemma 4") || modelName.hasSuffix("gemma-4"))
         let isLlama  = modelName.contains("llama") || modelName.contains("mistral")
         let isHarmonyModel = modelName.contains("gpt-oss") || modelName.contains("gpt_oss")
 
@@ -1535,13 +1551,27 @@ class ChatViewModel: ObservableObject {
         var history: [ChatMessage] = messages.count >= 2 ? Array(messages.dropLast(2)) : []
 
         // 2. Context Window Management (Sliding Window)
-        // Approx 4 chars per token. Limit history to ~3000 tokens (12,000 chars)
-        // to leave room for RAG context and the new response.
-        let maxHistoryChars = 12000
+        // Size history budget from the actual loaded context window so prompt + response fit.
+        // Reserve response = min(maxTokens, ctx/4) — maxTokens is a CAP, the real
+        // reply is almost always shorter, so reserving the full cap starves history
+        // and causes the model to "forget" its own prior replies (user sees it only
+        // remembering their own messages). Guaranteeing at least ctx/4 for response
+        // also prevents the 1-word-reply failure when history grows huge.
+        let effectiveCtxTokens = llmBackend.loadedContextWindow ?? max(512, Int(contextWindow))
+        let currentPromptTokensEstimate = max(32, currentUserPrompt.count / 3)
+        let ragTokensEstimate = (ragPrefix?.count ?? 0) / 3
+        let reservedForResponse = max(256, min(Int(maxTokens), effectiveCtxTokens / 4))
+        let reservedForCurrent = currentPromptTokensEstimate + ragTokensEstimate + 64
+        let reservedSafety = 128
+        let availableHistoryTokens = max(128, effectiveCtxTokens - reservedForResponse - reservedForCurrent - reservedSafety)
+        let maxHistoryChars = availableHistoryTokens * 3
         var currentChars = 0
         var truncatedHistory: [ChatMessage] = []
         
-        // Walk backwards through history to keep most recent turns
+        // Walk backwards through history to keep most recent turns.
+        // If a single message is larger than the full budget, truncate its MIDDLE
+        // rather than dropping it entirely — this preserves important context at
+        // the start and end of long assistant replies (e.g. stories).
         for msg in history.reversed() {
             // For context budget, count only the answer portion (thinking is stripped)
             let effectiveLen: Int
@@ -1599,7 +1629,9 @@ class ChatViewModel: ObservableObject {
 
         // Optionally inject RAG context or System Message as an opening turn.
         if let rag = ragPrefix, !rag.isEmpty {
-            if isGemma {
+            if isGemma4 {
+                parts.append("<|turn>system\n\(rag)<turn|>")
+            } else if isGemma {
                 parts.append("<start_of_turn>user\n\(rag)<end_of_turn>\n<start_of_turn>model\nUnderstood.<end_of_turn>")
             } else if isLlama {
                 parts.append("[INST] \(rag) [/INST]\nUnderstood.")
@@ -1622,7 +1654,10 @@ class ChatViewModel: ObservableObject {
             }
             guard !content.isEmpty else { continue }
 
-            if isGemma {
+            if isGemma4 {
+                let gemmaRole = msg.isFromUser ? "user" : "model"
+                parts.append("<|turn>\(gemmaRole)\n\(content)<turn|>")
+            } else if isGemma {
                 let gemmaRole = msg.isFromUser ? "user" : "model"
                 parts.append("<start_of_turn>\(gemmaRole)\n\(content)<end_of_turn>")
             } else if isLlama {
@@ -1638,7 +1673,10 @@ class ChatViewModel: ObservableObject {
         }
 
         // 4. Append the active new user prompt
-        if isGemma {
+        if isGemma4 {
+            parts.append("<|turn>user\n\(currentUserPrompt)<turn|>")
+            parts.append("<|turn>model\n")
+        } else if isGemma {
             parts.append("<start_of_turn>user\n\(currentUserPrompt)<end_of_turn>")
             parts.append("<start_of_turn>model\n")
         } else if isLlama {
@@ -1648,7 +1686,13 @@ class ChatViewModel: ObservableObject {
             parts.append("Assistant:")
         }
 
-        return parts.joined(separator: "\n")
+        let finalPrompt = parts.joined(separator: "\n")
+        #if DEBUG
+        let userTurns = truncatedHistory.filter { $0.isFromUser }.count
+        let asstTurns = truncatedHistory.filter { !$0.isFromUser }.count
+        print("📝 [PromptBuild] ctx=\(effectiveCtxTokens) histBudget=\(availableHistoryTokens)tok historyMsgs=user:\(userTurns)/asst:\(asstTurns) historyChars=\(currentChars) totalPromptChars=\(finalPrompt.count)")
+        #endif
+        return finalPrompt
     }
 }
 
@@ -2457,7 +2501,11 @@ struct ChatScreen: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    // VStack instead of LazyVStack: the lazy view recycling can
+                    // leave the scroll area blank when streaming rapidly mutates
+                    // the last message's height near the context window limit.
+                    // Chat sessions are capped in length so eager layout is fine.
+                    VStack(spacing: 12) {
                         if vm.messages.isEmpty {
                             emptyState
                         } else {
@@ -2527,8 +2575,15 @@ struct ChatScreen: View {
                         }
                     }
                 }
-                .onChange(of: vm.messages.last?.content ?? "") { _, _ in
-                    if vm.isGenerating, let last = vm.messages.last {
+                .onChange(of: vm.messages.last?.content ?? "") { _, newContent in
+                    // Throttle scroll-to-bottom during streaming — firing on every
+                    // token causes excessive layout work and can destabilize the
+                    // ScrollView when messages are near the context-window limit.
+                    guard vm.isGenerating, let last = vm.messages.last else { return }
+                    let shouldScroll = newContent.count < 80
+                        || newContent.count % 32 == 0
+                        || newContent.hasSuffix("\n")
+                    if shouldScroll {
                         proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
