@@ -4012,22 +4012,7 @@ struct VibeCoderScreen: View {
                                                                 .font(.caption.weight(.semibold))
                                                                 .foregroundStyle(.white.opacity(0.65))
                                                             Spacer()
-                                                            if message.role != "user" && !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                                                Button {
-                                                                    // Speak only the answer, never thinking tokens
-                                                                    let speakText = getDisplayContentWithoutThinking(message.text)
-                                                                    ttsManager.toggleSpeaking(
-                                                                        speakText.isEmpty ? message.text : speakText,
-                                                                        fallbackLanguage: settings.selectedLanguage,
-                                                                        key: "vibe-chat-\(message.id.uuidString)"
-                                                                    )
-                                                                } label: {
-                                                                    Image(systemName: ttsManager.isSpeaking(key: "vibe-chat-\(message.id.uuidString)") ? "stop.fill" : "speaker.wave.2")
-                                                                        .font(.system(size: 13, weight: .semibold))
-                                                                }
-                                                                .buttonStyle(.plain)
-                                                                .foregroundStyle(.white.opacity(0.68))
-                                                            }
+
                                                         }
                                                         if message.role == "user" {
                                                             Text(message.text)

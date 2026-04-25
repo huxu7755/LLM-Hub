@@ -870,7 +870,13 @@ bool LlamaCppTextGeneration::generate_stream(const TextGenerationRequest& reques
     bool leading_output_committed = false;
     bool has_emitted_visible_output = false;
 
-    int n_cur = batch.n_tokens;
+    // BUG FIX: When the prompt is processed in multiple chunks (prompt_tokens > n_batch),
+    // batch.n_tokens holds only the *last chunk's* token count, not the total prompt length.
+    // Using it as n_cur causes generated tokens to be inserted at a position already
+    // occupied by prompt KV entries, corrupting the cache and producing 1-char output
+    // (or "inconsistent sequence positions" llama_decode failures).
+    // The total prompt length is the correct starting position for the first generated token.
+    int n_cur = static_cast<int>(prompt_tokens);
     int tokens_generated = 0;
     bool stop_sequence_hit = false;
 

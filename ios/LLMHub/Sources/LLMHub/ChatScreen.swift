@@ -1118,6 +1118,9 @@ class ChatViewModel: ObservableObject {
         guard !input.isEmpty || hasAttachment else { return false }
         guard !isGenerating else { return false }
 
+        // New turn: cut off any ongoing auto-readout from previous turn
+        stopAutoReadout()
+
         let generationPrompt: String = {
             if !input.isEmpty { return input }
             if effectiveImageURL != nil { return "Describe this image." }
@@ -1312,6 +1315,11 @@ class ChatViewModel: ObservableObject {
             msgs[idx].tokenCount = tokens > 0 ? tokens : msgs[idx].tokenCount
             msgs[idx].tokensPerSecond = tps > 0 ? tps : msgs[idx].tokensPerSecond
             self.messages = msgs
+
+            // Progressive TTS: speak completed sentences as they stream in
+            if isGenerating {
+                progressiveTTSUpdate(fullContent: normalizedContent, messageKey: msgs[idx].id.uuidString)
+            }
         }
     }
 
@@ -1373,20 +1381,10 @@ class ChatViewModel: ObservableObject {
             }
             self.messages = msgs
 
-            if AppSettings.shared.autoReadoutEnabled {
-                let finishedMessage = msgs[idx]
-                let rawContent = finishedMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                // Speak only the answer portion — never read out thinking tokens.
-                let ttsContent = getDisplayContentWithoutThinking(rawContent)
-                let speakText = ttsContent.isEmpty ? rawContent : ttsContent
-                if !speakText.isEmpty {
-                    ttsManager.speak(
-                        speakText,
-                        fallbackLanguage: AppSettings.shared.selectedLanguage,
-                        key: finishedMessage.id.uuidString
-                    )
-                }
-            }
+            // Speak any remaining unread text (progressive TTS handles sentence-by-sentence
+            // during streaming; this catches the final fragment after the last sentence boundary).
+            let finishedMessage = msgs[idx]
+            progressiveTTSFinish(fullContent: finishedMessage.content, messageKey: finishedMessage.id.uuidString)
         }
         activeGeneratingMessageId = nil
     }
@@ -1394,7 +1392,7 @@ class ChatViewModel: ObservableObject {
     func stopGeneration() {
         streamingTask?.cancel()
         streamingTask = nil
-        ttsManager.stop()
+        stopAutoReadout()
         if let activeId = activeGeneratingMessageId,
            let idx = messages.firstIndex(where: { $0.id == activeId }),
            !messages[idx].isFromUser {
@@ -1410,7 +1408,14 @@ class ChatViewModel: ObservableObject {
         UIPasteboard.general.string = message.content
     }
 
+    /// Stop any ongoing auto-readout and reset the progressive TTS cursor.
+    func stopAutoReadout() {
+        ttsManager.stop()
+        ttsReadCursor = 0
+    }
+
     func newChat() {
+        stopAutoReadout()
         let session = ChatSession(title: AppSettings.shared.localized("drawer_new_chat"))
         chatStore.addSession(session)
         currentSessionId = session.id
@@ -1528,6 +1533,79 @@ class ChatViewModel: ObservableObject {
     }
 
     private var streamingTask: Task<Void, Never>?
+
+    // MARK: - Progressive TTS (sentence-by-sentence readout during streaming)
+    /// Tracks how many characters of the current AI message have already been sent to TTS.
+    private var ttsReadCursor: Int = 0
+    /// The key used for the current auto-readout turn, so we can stop it on new turn/chat switch.
+    private var autoReadoutKey: String?
+
+    /// Sentence-ending pattern: period/!/? followed by whitespace or end-of-string.
+    private static let sentenceEndRegex = try! NSRegularExpression(pattern: "[.!?。！？](?:\\s|$)", options: [])
+
+    /// Called from `updateLastAIMessageSync` during streaming to progressively speak completed sentences.
+    private func progressiveTTSUpdate(fullContent: String, messageKey: String) {
+        guard AppSettings.shared.autoReadoutEnabled else { return }
+
+        // Strip thinking tokens — only speak the answer portion
+        let displayContent: String
+        if contentHasThinkingMarkers(fullContent) {
+            displayContent = getDisplayContentWithoutThinking(fullContent)
+        } else {
+            displayContent = fullContent
+        }
+
+        guard displayContent.count > ttsReadCursor else { return }
+
+        let unread = String(displayContent.dropFirst(ttsReadCursor))
+        let range = NSRange(unread.startIndex..., in: unread)
+        let matches = Self.sentenceEndRegex.matches(in: unread, options: [], range: range)
+
+        guard let lastMatch = matches.last else { return }
+        let matchEnd = lastMatch.range.location + lastMatch.range.length
+        let sentenceEnd = unread.index(unread.startIndex, offsetBy: matchEnd)
+        let newText = String(unread[unread.startIndex..<sentenceEnd]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !newText.isEmpty else { return }
+
+        // If TTS is idle (first sentence) or has finished the previous chunk, speak the next chunk.
+        // If still speaking previous chunk, let it finish — we'll catch up on next token update.
+        if !ttsManager.isSpeaking {
+            autoReadoutKey = messageKey
+            ttsManager.speak(newText, fallbackLanguage: AppSettings.shared.selectedLanguage, key: messageKey)
+            ttsReadCursor += matchEnd
+        }
+    }
+
+    /// Speaks any remaining unread text after generation finishes.
+    private func progressiveTTSFinish(fullContent: String, messageKey: String) {
+        guard AppSettings.shared.autoReadoutEnabled else { return }
+
+        let displayContent: String
+        if contentHasThinkingMarkers(fullContent) {
+            displayContent = getDisplayContentWithoutThinking(fullContent)
+        } else {
+            displayContent = fullContent
+        }
+
+        let remaining = String(displayContent.dropFirst(ttsReadCursor)).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !remaining.isEmpty {
+            // Wait for current speech to finish, then speak remainder
+            autoReadoutKey = messageKey
+            let lang = AppSettings.shared.selectedLanguage
+            let key = messageKey
+            let mgr = ttsManager
+            Task { @MainActor in
+                // Poll briefly for current utterance to finish (max ~5s)
+                for _ in 0..<50 {
+                    if !mgr.isSpeaking { break }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                mgr.speak(remaining, fallbackLanguage: lang, key: key)
+            }
+        }
+        ttsReadCursor = 0
+    }
 
     private func existingFileURL(atPath path: String?) -> URL? {
         resolveStoredAttachmentURL(path)
@@ -2538,6 +2616,13 @@ struct ChatDrawerPanel: View {
                             .foregroundColor(ApolloPalette.accentStrong)
                             .fontWeight(.semibold)
                     }
+                    if !vm.chatSessions.isEmpty {
+                        Button(role: .destructive) {
+                            showDeleteAllAlert = true
+                        } label: {
+                            Label(settings.localized("drawer_clear_all_chats"), systemImage: "trash")
+                        }
+                    }
                 }
 
                 Section(settings.localized("drawer_recent_chats")) {
@@ -2548,6 +2633,7 @@ struct ChatDrawerPanel: View {
                     } else {
                         ForEach(vm.chatSessions) { session in
                             Button {
+                                vm.stopAutoReadout()
                                 vm.currentSessionId = session.id
                                 onClose()
                             } label: {
@@ -2580,31 +2666,7 @@ struct ChatDrawerPanel: View {
                     }
                 }
 
-                Section {
-                    Button {
-                        onClose()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            onNavigateToModels()
-                        }
-                    } label: {
-                        Label(settings.localized("drawer_download_models"), systemImage: "square.and.arrow.down")
-                    }
-                    Button {
-                        onClose()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            onNavigateToSettings()
-                        }
-                    } label: {
-                        Label(settings.localized("drawer_settings"), systemImage: "gearshape")
-                    }
-                    if !vm.chatSessions.isEmpty {
-                        Button(role: .destructive) {
-                            showDeleteAllAlert = true
-                        } label: {
-                            Label(settings.localized("drawer_clear_all_chats"), systemImage: "trash")
-                        }
-                    }
-                }
+
             }
             .scrollContentBackground(.hidden)
             .background(ApolloLiquidBackground())
@@ -3168,6 +3230,7 @@ struct ChatScreen: View {
             }
         }
         .onDisappear {
+            vm.stopAutoReadout()
             vm.unloadModel()
         }
     }
