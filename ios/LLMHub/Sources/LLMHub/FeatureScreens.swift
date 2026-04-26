@@ -4303,6 +4303,7 @@ struct VibeCoderScreen: View {
         }
         .onChange(of: workspaceFolderURL) { _, newValue in
             if newValue != nil {
+                refreshWorkspaceFiles()
                 restoreLastOpenedFileIfPossible()
             }
         }
@@ -4589,6 +4590,8 @@ struct VibeCoderScreen: View {
             // Keep using it for now; user can re-pick later.
         }
         workspaceFolderURL = url
+        refreshWorkspaceFiles()
+        restoreLastOpenedFileIfPossible()
     }
 
     private func setWorkspaceFolder(_ url: URL) {
