@@ -1260,17 +1260,26 @@ class ChatViewModel: ObservableObject {
                     }
                 }
 
+                // Determine stop sequences based on the chat template in use.
+                let stopSeqs: [String] = await MainActor.run {
+                    self.stopSequencesForCurrentModel()
+                }
+
                 try await llmBackend.generate(
                     prompt: multiTurnPrompt,
                     imageURL: effectiveImageURL,
                     audioURL: effectiveAudioURL,
-                    systemPrompt: finalSystemPrompt
+                    systemPrompt: finalSystemPrompt,
+                    stopSequences: stopSeqs
                 ) { [weak self] content, tokens, tps in
                     Task { @MainActor [weak self] in
                         guard let self = self else { return }
                         self.updateLastAIMessageSync(content: content, tokens: tokens, tps: tps)
                     }
                 }
+                await MainActor.run { self.finishGeneratingMessage() }
+            } catch is CancellationError {
+                // Task was cancelled (user stop, turn-leak auto-stop) — not an error.
                 await MainActor.run { self.finishGeneratingMessage() }
             } catch {
                 await updateLastAIMessage(content: "Error: \(error.localizedDescription)", isGenerating: false)
@@ -1302,6 +1311,26 @@ class ChatViewModel: ObservableObject {
         if let idx = targetIndex, !messages[idx].isFromUser {
             var msgs = self.messages
             let normalizedContent = normalizeStreamText(content)
+
+            // Detect turn leak: if the raw content is significantly longer than
+            // the normalized content, the model generated past its turn boundary
+            // (e.g. hallucinated "User:" / "Assistant:" exchanges). Auto-stop
+            // generation to avoid wasting tokens and leaving the stop button stuck.
+            let rawLen = content.trimmingCharacters(in: .whitespacesAndNewlines).count
+            let normLen = normalizedContent.count
+            if isGenerating && rawLen > normLen + 10 {
+                print("⚠️ [TurnLeak] Detected turn leak: raw=\(rawLen) normalized=\(normLen). Auto-stopping generation.")
+                msgs[idx].content = normalizedContent
+                msgs[idx].isGenerating = false
+                if totalTokens > 0 {
+                    msgs[idx].tokenCount = totalTokens
+                    msgs[idx].tokensPerSecond = tokensPerSecond
+                }
+                self.messages = msgs
+                stopGeneration()
+                return
+            }
+
             let parsed = parseThinkingAndAnswer(normalizedContent)
             if contentHasThinkingMarkers(normalizedContent) || !parsed.thinking.isEmpty {
                 print(
@@ -1358,6 +1387,17 @@ class ChatViewModel: ObservableObject {
                     normalized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
                     removedPrefix = true
                 }
+            }
+        }
+
+        // Truncate at leaked turn markers — the model should never generate a new
+        // "User:" turn. If it does, chop the response there to prevent fake exchanges.
+        let turnLeakPatterns = ["\nUser:", "\nuser:", "\nAssistant:", "\nassistant:", "\nHuman:", "\nhuman:"]
+        for pattern in turnLeakPatterns {
+            if let range = normalized.range(of: pattern) {
+                normalized = String(normalized[normalized.startIndex..<range.lowerBound])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                break
             }
         }
 
@@ -1617,6 +1657,28 @@ class ChatViewModel: ObservableObject {
     /// Uses the __RAW_PROMPT__ prefix to bypass SDK auto-formatting, ensuring we have 
     /// full control over the multi-turn sequence and context budget.
     @MainActor
+    /// Returns stop sequences appropriate for the current model's chat template.
+    /// This prevents models from generating past their turn boundary (e.g. hallucinating
+    /// fake "User:" / "Assistant:" exchanges).
+    private func stopSequencesForCurrentModel() -> [String] {
+        let modelName = selectedModelName.lowercased()
+        let isGemma  = modelName.contains("gemma")
+        let isLlama  = modelName.contains("llama") || modelName.contains("mistral")
+        let isHarmony = modelName.contains("gpt-oss") || modelName.contains("gpt_oss")
+
+        if isGemma {
+            // Gemma uses special tokens handled by the tokenizer
+            return []
+        } else if isLlama {
+            return ["[INST]"]
+        } else if isHarmony {
+            return ["<|start|>user"]
+        } else {
+            // Generic User:/Assistant: template (LFM, Phi, Qwen, etc.)
+            return ["\nUser:", "\nuser:"]
+        }
+    }
+
     func buildMultiTurnPrompt(currentUserPrompt: String, ragPrefix: String? = nil) -> String {
         let modelName = selectedModelName.lowercased()
         let modelSupportsThinking = chatModel(named: selectedModelName)?.supportsThinking == true

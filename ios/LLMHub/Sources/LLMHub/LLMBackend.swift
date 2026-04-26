@@ -1003,6 +1003,7 @@ class LLMBackend: ObservableObject {
             var phase1Chunks = 0
 
             for try await token in streamResult1.stream {
+                try Task.checkCancellation()
                 thinkingRaw += token
                 phase1Chunks += 1
                 let pureThinking = Self.extractHarmonyThinking(thinkingRaw)
@@ -1033,6 +1034,7 @@ class LLMBackend: ObservableObject {
                                         "<|channel|>final<|message|>", "<|channel|>analysis<|message|>"]
 
             for try await token in streamResult2.stream {
+                try Task.checkCancellation()
                 finalOutput += token
                 phase2Chunks += 1
                 if phase2Chunks == 1 {
@@ -1083,6 +1085,10 @@ class LLMBackend: ObservableObject {
         )
 
         for try await token in streamResult.stream {
+            // Respect Task cancellation — stop consuming tokens when the caller
+            // cancels (e.g. user taps stop, or turn-leak auto-stop).
+            try Task.checkCancellation()
+
             chunkCount += 1
             currentOutput += token
             // Strip <unusedN> thinking tokens (Gemma 4 emits these when thinking mode activates)
