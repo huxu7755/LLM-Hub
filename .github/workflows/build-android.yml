@@ -32,7 +32,7 @@ jobs:
           distribution: 'temurin'
 
       - name: 安装 Android SDK 工具
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           cmdline-tools-version: latest
           accept-android-sdk-licenses: true
@@ -42,7 +42,7 @@ jobs:
         run: chmod +x android/gradlew
 
       - name: 缓存 Gradle 依赖
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -74,19 +74,19 @@ jobs:
         run: find android/app/build/outputs -type f \( -name "*.apk" -o -name "*.aab" \) 2>/dev/null | head -20 || echo "No build outputs found"
 
       - name: 上传 Debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: app-debug.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: 上传 Release APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: app-release.apk
           path: android/app/build/outputs/apk/release/app-release.apk
 
       - name: 上传 Release AAB
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: app-release.aab
           path: android/app/build/outputs/bundle/release/app-release.aab
