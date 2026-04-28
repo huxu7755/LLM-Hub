@@ -13,10 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
-    env:
-      GRADLE_OPTS: "-Xmx4g -Xms2g -Dorg.gradle.jvmargs=-Xmx4g"
-      ANDROID_HOME: /usr/local/lib/android/sdk
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,6 +25,15 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 36
+          build-tools: 34.0.0
+          ndk: 26.1.10909125
+          cmake: 3.22.1
+          platform-tools: 34.0.5
 
       - name: Set Gradle executable permissions
         run: chmod +x android/gradlew
@@ -46,21 +51,24 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon -Pandroid.injected.signing.store.file=/dev/null
+        run: ./gradlew assembleDebug --no-daemon
         env:
-          JAVA_OPTS: "-Xmx4g"
+          GRADLE_OPTS: "-Xmx6g -Xms2g"
+          JAVA_OPTS: "-Xmx6g"
 
       - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon -Pandroid.injected.signing.store.file=/dev/null
+        run: ./gradlew assembleRelease --no-daemon
         env:
-          JAVA_OPTS: "-Xmx4g"
+          GRADLE_OPTS: "-Xmx6g -Xms2g"
+          JAVA_OPTS: "-Xmx6g"
 
       - name: Build release AAB
         working-directory: android
-        run: ./gradlew bundleRelease --no-daemon -Pandroid.injected.signing.store.file=/dev/null
+        run: ./gradlew bundleRelease --no-daemon
         env:
-          JAVA_OPTS: "-Xmx4g"
+          GRADLE_OPTS: "-Xmx6g -Xms2g"
+          JAVA_OPTS: "-Xmx6g"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
