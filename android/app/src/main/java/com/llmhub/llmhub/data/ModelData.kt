@@ -1953,6 +1953,75 @@ object ModelData {
             requirements = ModelRequirements(minRamGB = 26, recommendedRamGB = 32),
             contextWindowSize = 131072,
             modelFormat = "gguf"
+        ),
+
+        // Gemma-4 Uncensored Models (TrevorJS)
+        LLMModel(
+            name = "Gemma-4 E2B Uncensored (Q4_K_M)",
+            description = "TrevorJS Gemma-4 E2B uncensored model. Q4_K_M quantization (~1.5GB). No refusal, smallest size. Recommended for 6GB+ RAM devices.",
+            url = "https://hf-mirror.com/TrevorJS/gemma-4-E2B-it-uncensored-GGUF/resolve/main/gemma-4-E2B-it-uncensored-Q4_K_M.gguf?download=true",
+            category = "text",
+            sizeBytes = 1600000000L, // ~1.5 GB
+            source = "TrevorJS / Google",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 6, recommendedRamGB = 8),
+            contextWindowSize = 32768,
+            modelFormat = "gguf"
+        ),
+        LLMModel(
+            name = "Gemma-4 E4B Uncensored (Q4_K_M)",
+            description = "TrevorJS Gemma-4 E4B uncensored model. Q4_K_M quantization (~3GB). More capable, flagship device recommended. For 8GB+ RAM devices.",
+            url = "https://hf-mirror.com/TrevorJS/gemma-4-E4B-it-uncensored-GGUF/resolve/main/gemma-4-E4B-it-uncensored-Q4_K_M.gguf?download=true",
+            category = "text",
+            sizeBytes = 3200000000L, // ~3 GB
+            source = "TrevorJS / Google",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 8, recommendedRamGB = 10),
+            contextWindowSize = 32768,
+            modelFormat = "gguf"
+        ),
+
+        // Additional Uncensored Models
+        LLMModel(
+            name = "Gemma-4 E2B JANG_4M Crack (Q4_K_M)",
+            description = "dealignai Gemma-4 E2B JANG_4M crack model. Q4_K_M quantization (~1.5GB). Fully uncensored, refusal rate ≈0. For 6GB+ RAM devices.",
+            url = "https://hf-mirror.com/dealignai/Gemma-4-E2B-JANG_4M-CRACK-GGUF/resolve/main/Gemma-4-E2B-JANG_4M-CRACK-Q4_K_M.gguf?download=true",
+            category = "text",
+            sizeBytes = 1600000000L, // ~1.5 GB
+            source = "dealignai / Google",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 6, recommendedRamGB = 8),
+            contextWindowSize = 32768,
+            modelFormat = "gguf"
+        ),
+        LLMModel(
+            name = "Gemma-4 E2B Uncensored Aggressive (Q4_K_M)",
+            description = "HauhauCS Gemma-4 E2B aggressively uncensored model. Q4_K_M quantization (~1.5GB). Fast inference. For 6GB+ RAM devices.",
+            url = "https://hf-mirror.com/HauhauCS/Gemma-4-E2B-Uncensored-Aggressive-GGUF/resolve/main/Gemma-4-E2B-Uncensored-Aggressive-Q4_K_M.gguf?download=true",
+            category = "text",
+            sizeBytes = 1600000000L, // ~1.5 GB
+            source = "HauhauCS / Google",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 6, recommendedRamGB = 8),
+            contextWindowSize = 32768,
+            modelFormat = "gguf"
+        ),
+        LLMModel(
+            name = "Gemma-4 E2B Obliterated (Q4_K_M)",
+            description = "OBLITERATUS Gemma-4 E2B obliterated model. Q4_K_M quantization (~1.5GB). Safety layers completely removed. For 6GB+ RAM devices.",
+            url = "https://hf-mirror.com/OBLITERATUS/gemma-4-E2B-it-OBLITERATED-GGUF/resolve/main/gemma-4-E2B-it-OBLITERATED-Q4_K_M.gguf?download=true",
+            category = "text",
+            sizeBytes = 1600000000L, // ~1.5 GB
+            source = "OBLITERATUS / Google",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 6, recommendedRamGB = 8),
+            contextWindowSize = 32768,
+            modelFormat = "gguf"
         )
         // Note: Gecko tokenizer removed - Gecko models have built-in tokenizers
     )
