@@ -1188,7 +1188,7 @@ private fun ImportExternalModelDialog(
                                 textDecoration = TextDecoration.Underline
                             ),
                             onClick = { offset ->
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/litert-community"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://hf-mirror.com/litert-community"))
                                 context.startActivity(intent)
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -1213,7 +1213,7 @@ private fun ImportExternalModelDialog(
                                 textDecoration = TextDecoration.Underline
                             ),
                             onClick = { offset ->
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/xororz/sd-qnn/tree/main"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://hf-mirror.com/xororz/sd-qnn/tree/main"))
                                 context.startActivity(intent)
                             },
                             modifier = Modifier.fillMaxWidth()
