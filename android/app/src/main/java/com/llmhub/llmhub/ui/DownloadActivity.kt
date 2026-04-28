@@ -14,7 +14,7 @@ class DownloadActivity : Activity() {
         val intent = Intent(this, ModelDownloadService::class.java).apply {
             putExtra("modelName", "MyModel")
             putExtra("modelDescription", "A test model for demo.")
-            putExtra("modelUrl", "https://huggingface.co/path/to/model.gguf")
+            putExtra("modelUrl", "https://hf-mirror.com/path/to/model.gguf")
             putExtra("modelSize", 123456789L)
             putExtra("modelCategory", "llm")
             putExtra("modelSource", "huggingface")

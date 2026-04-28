@@ -196,12 +196,24 @@ object LocaleHelper {
      * Get list of supported locales with their display names
      */
     fun getSupportedLanguages(context: Context): List<Pair<String, String>> {
+        val languageNames = mapOf(
+            "zh" to "简体中文",
+            "ja" to "日本語",
+            "ko" to "한국어",
+            "ar" to "العربية",
+            "fa" to "فارسی",
+            "he" to "עברית",
+            "uk" to "Українська"
+        )
+        
         return supportedLocales
-            .filter { it != "in" && it != "iw" } // Hide legacy codes from the UI
+            .filter { it != "in" && it != "iw" }
             .map { code ->
-                val locale = Locale(code)
-                val displayName = locale.getDisplayLanguage(locale).replaceFirstChar { 
-                    if (it.isLowerCase()) it.titlecase(locale) else it.toString() 
+                val displayName = languageNames.getOrElse(code) {
+                    val locale = Locale(code)
+                    locale.getDisplayLanguage(locale).replaceFirstChar { 
+                        if (it.isLowerCase()) it.titlecase(locale) else it.toString() 
+                    }
                 }
                 code to displayName
             }
