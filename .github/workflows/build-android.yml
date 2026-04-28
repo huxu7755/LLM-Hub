@@ -17,6 +17,7 @@ jobs:
       ANDROID_HOME: /usr/local/lib/android/sdk
       GRADLE_OPTS: "-Xmx6g -Xms2g -Dorg.gradle.parallel=false -Dorg.gradle.caching=true"
       JAVA_OPTS: "-Xmx6g"
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: 检出代码（跳过子模块）
@@ -31,14 +32,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 安装 Android SDK
+      - name: 安装 Android SDK 工具
         uses: android-actions/setup-android@v3
         with:
-          api-level: 36
-          build-tools: 34.0.0
-          ndk: 26.1.10909125
-          cmake: 3.22.1
-          platform-tools: 34.0.5
+          cmdline-tools-version: latest
+          accept-android-sdk-licenses: true
+          packages: |
+            platforms;android-36
+            build-tools;34.0.0
+            ndk;26.1.10909125
+            cmake;3.22.1
+            platform-tools
 
       - name: 设置 Gradle 可执行权限
         run: chmod +x android/gradlew
@@ -57,31 +61,23 @@ jobs:
       - name: 创建空的 local.properties
         run: echo "" > android/local.properties
 
-      - name: 打印环境信息
-        run: |
-          echo "=== 环境信息 ==="
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "JAVA_HOME: $JAVA_HOME"
-          java -version
-
       - name: 构建 Debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon 2>&1
         timeout-minutes: 60
 
       - name: 构建 Release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon 2>&1
         timeout-minutes: 90
 
       - name: 构建 Release AAB
         working-directory: android
-        run: ./gradlew bundleRelease --no-daemon
+        run: ./gradlew bundleRelease --no-daemon 2>&1
         timeout-minutes: 90
 
-      - name: 列出构建输出
-        run: ls -la android/app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug APK 未找到"
-        continue-on-error: true
+      - name: 列出构建输出目录
+        run: find android/app/build/outputs -type f -name "*.apk" -o -name "*.aab" 2>/dev/null || echo "No build outputs found"
 
       - name: 上传 Debug APK
         uses: actions/upload-artifact@v4
