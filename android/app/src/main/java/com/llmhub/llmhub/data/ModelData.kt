@@ -1839,6 +1839,120 @@ object ModelData {
             requirements = ModelRequirements(minRamGB = 2, recommendedRamGB = 4),
             contextWindowSize = 0,
             modelFormat = "mnn_cpu" // MNN framework for CPU inference
+        ),
+
+        // Qwen 3.6 Models (Alibaba - GGUF)
+        LLMModel(
+            name = "Qwen 3.6 27B Instruct (Q4_K_M)",
+            description = "Alibaba Qwen 3.6 27B instruction model. Q4_K_M quantization. 128k context window. Excellent performance for complex tasks. Ready to download from HF Mirror.",
+            url = "https://hf-mirror.com/Qwen/Qwen3.6-27B-Instruct-GGUF/resolve/main/Qwen3.6-27B-Instruct-Q4_K_M.gguf?download=true",
+            category = "text",
+            sizeBytes = 18000000000L, // 18 GB
+            source = "Alibaba Qwen",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 20, recommendedRamGB = 24),
+            contextWindowSize = 131072,
+            modelFormat = "gguf"
+        ),
+        LLMModel(
+            name = "Qwen 3.6 27B Instruct (Q5_K_M)",
+            description = "Alibaba Qwen 3.6 27B instruction model. Q5_K_M quantization for better quality. 128k context window. Ready to download from HF Mirror.",
+            url = "https://hf-mirror.com/Qwen/Qwen3.6-27B-Instruct-GGUF/resolve/main/Qwen3.6-27B-Instruct-Q5_K_M.gguf?download=true",
+            category = "text",
+            sizeBytes = 21000000000L, // 21 GB
+            source = "Alibaba Qwen",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 22, recommendedRamGB = 26),
+            contextWindowSize = 131072,
+            modelFormat = "gguf"
+        ),
+
+        // Qwen 3.6 35B A3B Models (Multimodal - Vision + Text)
+        LLMModel(
+            name = "Qwen 3.6 35B A3B (Q4_K_M)",
+            description = "Alibaba Qwen 3.6 35B A3B multimodal model. Q4_K_M quantization. Supports text and vision input. 128k context window. Ready to download from HF Mirror.",
+            url = "https://hf-mirror.com/Qwen/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-Q4_K_M.gguf?download=true",
+            category = "multimodal",
+            sizeBytes = 24000000000L, // 24 GB
+            source = "Alibaba Qwen",
+            supportsVision = true,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 26, recommendedRamGB = 32),
+            contextWindowSize = 131072,
+            modelFormat = "gguf"
+        ),
+
+        // DeepSeek-V4 Models (DeepSeek AI)
+        LLMModel(
+            name = "DeepSeek-V4 Pro (Q4_K_M)",
+            description = "DeepSeek-V4 Pro model. Q4_K_M quantization. Excellent reasoning capabilities. 128k context window. Ready to download from HF Mirror.",
+            url = "https://hf-mirror.com/deepseek-ai/DeepSeek-V4-Pro-GGUF/resolve/main/deepseek-v4-pro-q4_k_m.gguf?download=true",
+            category = "text",
+            sizeBytes = 18000000000L, // 18 GB
+            source = "DeepSeek AI",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 20, recommendedRamGB = 24),
+            contextWindowSize = 131072,
+            modelFormat = "gguf"
+        ),
+        LLMModel(
+            name = "DeepSeek-V4 Flash (Q4_K_M)",
+            description = "DeepSeek-V4 Flash model. Q4_K_M quantization. Optimized for speed. 128k context window. Ready to download from HF Mirror.",
+            url = "https://hf-mirror.com/deepseek-ai/DeepSeek-V4-Flash-GGUF/resolve/main/deepseek-v4-flash-q4_k_m.gguf?download=true",
+            category = "text",
+            sizeBytes = 10000000000L, // 10 GB
+            source = "DeepSeek AI",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 12, recommendedRamGB = 16),
+            contextWindowSize = 131072,
+            modelFormat = "gguf"
+        ),
+
+        // Moonshot Kimi-2.6 Models
+        LLMModel(
+            name = "Kimi-2.6 (Q4_K_M)",
+            description = "Moonshot Kimi-2.6 model. Q4_K_M quantization. Supports 800k context window for long document processing. Ready to download from HF Mirror.",
+            url = "https://hf-mirror.com/moonshotai/Kimi-2.6-GGUF/resolve/main/Kimi-2.6-q4_k_m.gguf?download=true",
+            category = "text",
+            sizeBytes = 22000000000L, // 22 GB
+            source = "Moonshot AI",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 24, recommendedRamGB = 32),
+            contextWindowSize = 819200,
+            modelFormat = "gguf"
+        ),
+
+        // Unsloth Qwen 3.6 Models (Optimized)
+        LLMModel(
+            name = "Unsloth Qwen 3.6 27B (Q4_K_M)",
+            description = "Unsloth optimized Qwen 3.6 27B model. Q4_K_M quantization. Fast inference with good quality. 128k context window. Ready to download from HF Mirror.",
+            url = "https://hf-mirror.com/unsloth/Qwen3.6-27B-GGUF/resolve/main/Qwen3.6-27B-Q4_K_M.gguf?download=true",
+            category = "text",
+            sizeBytes = 18000000000L, // 18 GB
+            source = "Unsloth / Alibaba Qwen",
+            supportsVision = false,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 20, recommendedRamGB = 24),
+            contextWindowSize = 131072,
+            modelFormat = "gguf"
+        ),
+        LLMModel(
+            name = "Unsloth Qwen 3.6 35B-A3B (Q4_K_M)",
+            description = "Unsloth optimized Qwen 3.6 35B-A3B multimodal model. Q4_K_M quantization. Supports text and vision. 128k context window. Ready to download from HF Mirror.",
+            url = "https://hf-mirror.com/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-Q4_K_M.gguf?download=true",
+            category = "multimodal",
+            sizeBytes = 24000000000L, // 24 GB
+            source = "Unsloth / Alibaba Qwen",
+            supportsVision = true,
+            supportsGpu = true,
+            requirements = ModelRequirements(minRamGB = 26, recommendedRamGB = 32),
+            contextWindowSize = 131072,
+            modelFormat = "gguf"
         )
         // Note: Gecko tokenizer removed - Gecko models have built-in tokenizers
     )
