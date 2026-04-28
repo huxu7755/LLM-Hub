@@ -211,15 +211,15 @@ rm -rf ~/Library/Developer/Xcode/DerivedData/LLMHub-*
 ## 许可证
 - 源代码采用 [PolyForm Noncommercial License 1.0.0](LICENSE) 许可。
 - 你可以免费使用、学习和基于此项目进行非商业目的的开发。
-- **商业用途（包括分发应用、收费或通过广告/IAP 获利）未经作者明确书面许可不允许。**
-- 商业许可咨询请联系 timmyboy0623@gmail.com。
 
 ## 支持
-- 邮箱：timmyboy0623@gmail.com
 - Issues & Discussions: GitHub
 
 ## 说明
 - 本 README 有意保持简洁 — 有关确切的模型变体、大小和格式详情，请查阅 `ModelData.kt`。
+
+## 版权声明
+本项目是基于 [timmyy123/LLM-Hub](https://github.com/timmyy123/LLM-Hub) 修改的衍生版本。感谢原作者的开源贡献。
 
 ## Star 历史
 
