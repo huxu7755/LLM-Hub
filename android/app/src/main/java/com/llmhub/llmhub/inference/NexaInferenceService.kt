@@ -226,25 +226,41 @@ class NexaInferenceService @Inject constructor(
                             input.copyTo(output)
                         }
                     }
-                    Log.d(TAG, "Copied imported model to: ${targetFile.absolutePath}")
+                    Log.d(TAG, "Copied imported model to: ${targetFile.absolutePath}, size: ${targetFile.length()} bytes")
                 } catch (e: SecurityException) {
                     Log.e(TAG, "Permission denied for URI: ${model.url}")
                     return false
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to copy imported model: ${e.message}", e)
+                    return false
                 }
             } else {
-                Log.d(TAG, "Using existing copied model: ${targetFile.absolutePath}")
+                Log.d(TAG, "Using existing copied model: ${targetFile.absolutePath}, size: ${targetFile.length()} bytes")
             }
 
             if (!targetFile.exists()) {
                 Log.e(TAG, "Failed to copy imported model from URI: ${model.url}")
                 return false
             }
+            
+            // Validate GGUF file header
+            if (!isValidGgufFile(targetFile)) {
+                Log.e(TAG, "Imported model is not a valid GGUF file: ${targetFile.absolutePath}")
+                return false
+            }
+            
             modelFile = targetFile
         } else {
             modelFile = findGGUFModelFile(modelDir, model)
 
             if (!modelFile.exists()) {
                 Log.e(TAG, "Model file not found: ${modelFile.absolutePath}")
+                return false
+            }
+            
+            // Validate GGUF file header
+            if (!isValidGgufFile(modelFile)) {
+                Log.e(TAG, "Model file is not a valid GGUF file: ${modelFile.absolutePath}")
                 return false
             }
         }
@@ -461,6 +477,31 @@ class NexaInferenceService @Inject constructor(
         val modelDirName = model.name.replace(" ", "_").replace(Regex("[^a-zA-Z0-9_.-]"), "")
         val modelDir = File(modelsDir, modelDirName)
         return if (modelDir.exists()) modelDir else modelsDir
+    }
+    
+    /**
+     * Validate that a file is a valid GGUF format by checking the magic header.
+     */
+    private fun isValidGgufFile(file: File): Boolean {
+        return try {
+            java.io.RandomAccessFile(file, "r").use { raf ->
+                if (raf.length() < 4) {
+                    Log.e(TAG, "GGUF file too small: ${file.name}, size: ${raf.length()} bytes")
+                    return false
+                }
+                val magic = ByteArray(4)
+                raf.readFully(magic)
+                val magicStr = String(magic)
+                val isValid = magicStr == "GGUF"
+                if (!isValid) {
+                    Log.e(TAG, "Invalid GGUF magic bytes: ${magic.joinToString { String.format("%02X", it) }}")
+                }
+                isValid
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to validate GGUF file: ${e.message}", e)
+            false
+        }
     }
     
     private fun findGGUFModelFile(modelDir: File, model: LLMModel): File {
