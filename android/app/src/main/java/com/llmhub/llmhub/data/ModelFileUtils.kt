@@ -11,6 +11,22 @@ import java.io.File
  * detection logic.
  */
 fun LLMModel.localFileName(): String {
+    // For content:// URIs (imported models), use the model name directly
+    // because the URI doesn't contain the actual filename
+    if (url.startsWith("content://")) {
+        val extension = when (modelFormat.lowercase()) {
+            "task" -> ".task"
+            "litertlm" -> ".litertlm"
+            "tflite" -> ".tflite"
+            "model" -> ".model"
+            "bin" -> ".bin"
+            "gguf" -> ".gguf"
+            "onnx" -> ".onnx"
+            else -> ".gguf"
+        }
+        return "${name.replace(" ", "_").replace("[^a-zA-Z0-9_-]".toRegex(), "")}${extension}"
+    }
+    
     val candidate = url.substringAfterLast('/')
         .substringBefore('?')
         .substringBefore('#')

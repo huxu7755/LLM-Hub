@@ -57,7 +57,13 @@ class UnifiedInferenceService(private val context: Context) : InferenceService {
             val success = currentService.loadModel(model, preferredBackend, deviceId)
             if (!success) {
                 currentModel = null
-                throw AllBackendsFailedException("Backend ${currentService.javaClass.simpleName} failed to load model '${model.name}'")
+                // Provide more detailed error message for GGUF models
+                val errorMsg = if (model.modelFormat == "gguf") {
+                    "Failed to load GGUF model '${model.name}'. This may be due to:\n- Model file corruption\n- Insufficient device memory\n- Incompatible model format\n- Missing Nexa SDK support on this device"
+                } else {
+                    "Backend ${currentService.javaClass.simpleName} failed to load model '${model.name}'"
+                }
+                throw AllBackendsFailedException(errorMsg)
             }
             updateAgentTools(model)
             return true
@@ -67,7 +73,9 @@ class UnifiedInferenceService(private val context: Context) : InferenceService {
         } catch (e: Exception) {
             android.util.Log.e("UnifiedInferenceService", "Service ${currentService.javaClass.simpleName} failed to load model '${model.name}'", e)
             currentModel = null
-            throw AllBackendsFailedException("Failed to load model '${model.name}': ${e.message}")
+            // Provide more detailed error message with exception info
+            val errorMsg = "Failed to load model '${model.name}': ${e.message}. ${if (model.modelFormat == "gguf") "Please ensure the model file is a valid GGUF format and your device has sufficient memory." else ""}"
+            throw AllBackendsFailedException(errorMsg)
         }
     }
 

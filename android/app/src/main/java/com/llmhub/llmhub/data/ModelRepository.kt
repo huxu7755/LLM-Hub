@@ -107,19 +107,47 @@ object ModelRepository {
                 if (model.category == "qnn_npu" || model.category == "mnn_cpu") {
                     return@filter false
                 }
+                
                 // Ensure the backing file still exists and is valid
-                val modelsDir = File(context.filesDir, "models")
-                val file = File(modelsDir, model.localFileName())
-                val exists = file.exists()
-                val valid = exists && isModelFileValid(file, model.modelFormat)
-                if (!valid) {
-                    Log.d(TAG, "Skipping stale imported model ${model.name}: exists=$exists valid=$valid")
+                val isValid = isImportedModelValid(context, model)
+                if (!isValid) {
+                    Log.d(TAG, "Skipping stale imported model ${model.name}")
                 }
-                exists && valid
+                isValid
             }.map { it.copy(isDownloaded = true) }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse imported models: ${e.message}")
             emptyList()
         }
+    }
+    
+    /**
+     * Check if an imported model is valid.
+     * For models with content:// URI, verify the URI is accessible.
+     * For models with file:// path, verify the file exists and is valid.
+     */
+    private fun isImportedModelValid(context: Context, model: LLMModel): Boolean {
+        // Check if model has content:// URI (imported from external storage)
+        if (model.source == "Custom" && model.url.startsWith("content://")) {
+            return try {
+                val uri = android.net.Uri.parse(model.url)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    // Check if stream is readable and has content
+                    val bytes = ByteArray(4)
+                    val read = input.read(bytes)
+                    read >= 0
+                } ?: false
+            } catch (e: Exception) {
+                Log.d(TAG, "Content URI not accessible for ${model.name}: ${e.message}")
+                false
+            }
+        }
+        
+        // Check if model file exists in app's private models directory
+        val modelsDir = File(context.filesDir, "models")
+        val file = File(modelsDir, model.localFileName())
+        val exists = file.exists()
+        val valid = exists && isModelFileValid(file, model.modelFormat)
+        return exists && valid
     }
 }
